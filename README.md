@@ -2,8 +2,8 @@
 
 A protected vault for your Riot accounts. Click a card, and it signs in.
 
-Built for Windows, C# / WPF on .NET 9. Everything stays on your machine — there is no server, no
-sync, and no telemetry.
+Windows, C# / WPF on .NET 9. Everything stays on your machine — no server, no sync, no telemetry, and
+no API key required for anything that matters.
 
 ---
 
@@ -37,6 +37,78 @@ that state rather than leaving it to you.
 
 ---
 
+## What it knows about each account
+
+All of this is read from the **local client**. No API key, no rate limit, no expiry — the trade is
+that it can only be read while that account is signed in, so what you get is an explicit snapshot
+from the last sign-in rather than a live figure, and the UI says so.
+
+| | |
+|---|---|
+| Riot ID, account id, level, icon | after the first sign-in |
+| Solo and flex rank, LP, W/L, placements, peak tier, last season's finish | ↑ |
+| RP and Blue Essence | ↑ |
+| Champions and skins owned, with the date each was acquired | ↑ |
+| Loot — shards, essence, keys, chests, eternals, with disenchant values and expiry | ↑ |
+| Champion mastery and ranked season rewards | ↑ |
+| **Account created**, last password change, legacy login username, original region | ↑ |
+| **Every Riot ID the account has used**, with the date each was taken — Riot's own record | ↑ |
+| Registered email (masked by Riot), phone (country code + last 4), 2FA, region history | ↑ |
+| First champion and first skin ever bought, with dates | derived from purchase dates |
+| Recovery email in full, purchase receipts, 2FA backup codes, security answers | **typed by you** — nothing local exposes them |
+
+The last row is short on purpose. The League client's entire RPC surface — all 1,465 functions — was
+enumerated looking for purchase or receipt history. **There is none.** `/lol-inventory/v1/wallet/transactions`
+looks like it would be and is a false positive. So the earliest-purchase reference stays a field you
+fill in, and the app does not pretend otherwise.
+
+**Recovery sheet** (card `⋯` menu) renders the lot as one page ordered the way a support ticket wants
+it, and **omits secrets by default** so it is safe to paste.
+
+---
+
+## The fleet view
+
+The part a single-account tool cannot do. Every companion app attaches to whichever client is
+running, so it only ever sees one account; a vault holding all of them can answer questions that are
+meaningless for one.
+
+- **Find a skin across every account** — "who owns Elementalist Lux, and which account should I buy it
+  on?" Accounts never signed into are left out of *both* columns, because an account that has not been
+  read cannot say what it owns, and guessing would send you to buy something twice.
+- **Portfolio** — totals, distinct skins owned, how much of it is no longer sold, and RP at listed
+  prices. That figure is labelled *"at listed prices"* and never as a value: it is not what was paid,
+  and it is emphatically not what an account is worth. Skins with no listed price are counted and
+  reported as unpriced rather than estimated — inventing numbers would make the total look precise
+  while being fiction.
+- **Dormancy and ranked decay** — the silent failure of owning many accounts. It only touches the ones
+  you are not looking at, and by the time you notice, the LP is gone.
+- **Which sign-ins are still instant**, and which will need the password typed next time.
+- **Export to CSV**, and a **repair toolbox** for a client that has got itself stuck: close the
+  clients, clear a stale lockfile, clear the embedded browser's cache.
+
+---
+
+## Vault safety
+
+- **Deleting is reversible.** *Move to trash* hides an account but keeps its password, session and
+  recovery dossier; purging is a separate, deliberate act. The dossier is the one thing here that
+  signing in again cannot rebuild.
+- **Reused-password detection.** With a pile of smurfs, one leaked credential pair tried everywhere
+  takes all of them together. Passwords are compared by a fingerprint held only in memory, so no list
+  of them is ever assembled, and no finding quotes a secret.
+- **Password history**, so a rotation typed with a typo is not a lockout.
+- **Copying a password** excludes it from Windows clipboard history and Cloud Clipboard sync — else a
+  password from an encrypted local vault ends up in plaintext somewhere the vault has no say over —
+  and clears it afterwards, but only if it is still the thing on the clipboard.
+- **Backups are checked**, including whether they sit on the same drive as the vault they protect. A
+  rolling backup beside the file covers a bad write and nothing else: not a failed disk, not
+  ransomware, not a wiped profile.
+- **Streamer mode** hides account names automatically while capture software is running. Your own
+  labels are left alone — it is the Riot ID and login name that are searchable.
+
+---
+
 ## Safety
 
 **A running game blocks everything.** Switching accounts closes the Riot Client, and doing that
@@ -51,6 +123,14 @@ stops matching, typing stops and nothing further is sent.
 
 **Vanguard is never touched.** `vgc`, `vgk` and `vgtray` are left strictly alone. The session-swap
 path injects no input and reads no process memory at all, which is the other reason it is preferred.
+
+**Refreshing an account refuses unless the client is signed into that same account.** The client can
+only answer for whoever is signed in, so refreshing against the wrong one would copy that account's
+rank, collection and recovery details onto this card — silently, permanently, and looking entirely
+plausible afterwards.
+
+**Loot is strictly read-only.** No disenchant, reroll or redeem. An automation bug there would destroy
+something unrecoverable.
 
 **Your client settings are not clobbered.** `RiotClientSettings.yaml` holds ~96 keys that are none of
 our business — patch-note hashes, telemetry opt-outs, A/B cohorts, saved UI state. The app edits only
@@ -85,7 +165,8 @@ master password ──Argon2id(64 MiB, t=3, p=4)──► vault key (32 bytes)
   the vault.
 - **Auto-locks** on idle, on Windows locking, and optionally on minimise. The key is zeroed on lock.
 - **Secrets never reach a log.** Passwords and backup codes are typed `SecretText`, whose `ToString()`
-  returns `***`, and a redacting serialiser masks every one of them at once. A test asserts it.
+  returns `***`, and a redacting serialiser masks every one of them at once. Tests assert it, and that
+  the CSV export contains no secret of any kind.
 - Every save is atomic and takes a timestamped backup first, so a crash mid-write costs you the last
   save, never the vault.
 
@@ -95,8 +176,8 @@ master password ──Argon2id(64 MiB, t=3, p=4)──► vault key (32 bytes)
 
 The app requests elevation on launch. That is not enthusiasm for privilege — it is forced.
 
-`RiotClientServices.exe` ships an `asInvoker` manifest, so in principle nothing here needs admin.
-But this machine carries a Windows *"Run as administrator"* compatibility flag on it:
+`RiotClientServices.exe` ships an `asInvoker` manifest, so in principle nothing here needs admin. But
+Windows may carry a *"Run as administrator"* compatibility flag on it:
 
 ```
 HKCU\...\AppCompatFlags\Layers
@@ -107,14 +188,14 @@ HKCU\...\AppCompatFlags\Layers
 
 That makes the Riot Client run at high integrity, and Windows UIPI then forbids a normal-integrity
 process from doing all three things this app needs: **typing into it**, **reading its window**, and
-**closing it** — each failing with its own unrelated-looking error. Matching its level is the only
-way to keep those working without altering your Riot setup.
+**closing it** — each failing with its own unrelated-looking error. Matching its level is the only way
+to keep those working without altering your Riot setup.
 
-If you ever clear those tick boxes (Properties → Compatibility on each executable), nothing needs
-elevation any more and `requireAdministrator` can come back out of `src/LAM.App/app.manifest`.
+If you clear those tick boxes (Properties → Compatibility on each executable), nothing needs elevation
+any more and `requireAdministrator` can come back out of `src/LAM.App/app.manifest`.
 
-**Settings → Diagnostics** reports your current integrity level and any Riot compatibility flags, so
-a mismatch reads as a stated fact rather than a mystery. `lam-diag paths` prints the same thing.
+**Settings → Diagnostics** reports your current integrity level and any Riot compatibility flags, so a
+mismatch reads as a stated fact rather than a mystery. `lam-diag paths` prints the same thing.
 
 ---
 
@@ -124,85 +205,62 @@ a mismatch reads as a stated fact rather than a mystery. `lam-diag paths` prints
 2. Choose a master password. **There is no reset.** Write it down somewhere physical.
 3. Say yes to Windows Hello when offered — it becomes your everyday unlock.
 4. **Add account** → name, Riot login username, password, region.
-5. Click the card. The first time it types; watch it, then leave it alone.
-6. After that first sign-in the app fills in the Riot ID, PUUID and level by itself, and the card
-   changes from *"Types password"* to *"Instant — saved session"*.
+5. Click **Sign in** on the card. The first time it types; watch it, then leave it alone.
+6. After that the app fills in everything in the table above by itself, and the button changes from
+   *"Types the saved password"* to *"Sign in from the saved session — no typing"*.
+
+Clicking the card body opens the account rather than signing in — a sign-in closes the Riot Client and
+League, so it should never happen because a window was opened.
 
 ---
 
-## Will session-swapping work on your client?
+## lam-diag
 
-Probably, but it was not provable from the files alone — on the machine this was built on
-`riot-login: persist` was `null` and the cookie jar held only a device cookie (`tdid`), which is what
-a signed-out client looks like. So there is a tool to check:
-
-It is a command-line tool, so double-clicking it does nothing useful. Open a terminal in
+A command-line pre-flight tool, so double-clicking it does nothing useful. Open a terminal in
 `publish\diag\` (or `tools\LAM.Diag\bin\Debug\net9.0-windows10.0.19041.0\` for a dev build):
 
 ```powershell
-cd "C:\Users\marcr\Desktop\league-account-manager\publish\diag"
-
-.\lam-diag.exe session     # what the client is storing right now
-.\lam-diag.exe watch       # watch the file while you sign in with "Stay signed in" ticked
-.\lam-diag.exe paths       # what was detected, whether a game is running, elevation state
-.\lam-diag.exe roundtrip   # prove RiotClientSettings.yaml survives being rewritten
+.\lam-diag.exe session      # what the client is storing right now
+.\lam-diag.exe watch        # watch the file while you sign in with "Stay signed in" ticked
+.\lam-diag.exe paths        # what was detected, whether a game is running, elevation state
+.\lam-diag.exe roundtrip    # prove RiotClientSettings.yaml survives being rewritten
+.\lam-diag.exe collection   # read rank, collection, loot and the recovery dossier
 ```
 
-All four are read-only; none of them change anything.
+All of them are read-only. `collection` exists because the two worst bugs this project has had both
+rendered perfectly healthy-looking screens — printing the real figures beside the client's own is the
+only check that would have caught either.
 
-`lam-diag watch` tells you plainly whether a resumable session appeared. If it never does, this
-client does not persist sessions, the app types every time, and **nothing else changes** — it is a
-performance and safety optimisation, not a requirement. The same information is in
-**Settings → Diagnostics**.
+`lam-diag watch` tells you plainly whether a resumable session appeared. If it never does, this client
+does not persist sessions, the app types every time, and **nothing else changes** — it is a
+performance and safety optimisation, not a requirement.
 
 ---
 
-## Rank, level, and account age
+## An optional API key
 
-Optional, and only for display. **Signing in works without an API key.**
+**Signing in works without one, and so does everything in the table above.** A key is useful for
+exactly one thing: refreshing an account you are *not* currently signed into.
 
-Get a key at [developer.riotgames.com](https://developer.riotgames.com) and paste it into
+Get one at [developer.riotgames.com](https://developer.riotgames.com) and paste it into
 **Settings → Riot API**. Register a **Personal** key — Development keys expire every 24 hours.
 
 **Estimate account age** (card `⋯` menu) binary-searches match history for the oldest game. Note the
 honest caveat: match-v5 only reaches back to roughly mid-2021, so for an older account the answer is
-*"at least this old"* and the app says exactly that rather than presenting a floor as a birthday.
-
----
-
-## The recovery dossier
-
-You asked for anything that helps get an account back. Being precise about what is possible:
-
-| | Where it comes from |
-|---|---|
-| PUUID, Riot ID, summoner/account id, level, icon | **Automatic** — the League client, right after sign-in |
-| Rank (solo + flex), last activity | **Automatic** — Riot API |
-| Every Riot ID the account has used | **Automatic** — PUUID is stable, so renames are detected |
-| Account age (a lower bound) | **Automatic** — oldest match on record |
-| Email, phone, real creation date, how you got it, first champion bought, purchase receipts, 2FA backup codes, security answers | **Typed once, by you** — no Riot API exposes any of it |
-
-The **PUUID is the single most valuable field**, because it survives every rename. It is captured for
-free on the first sign-in.
-
-Each card shows a warning when the dossier has a hole in it — no recovery email, an email you have
-said you no longer control, or 2FA enabled with no backup codes stored. **Recovery sheet** (card `⋯`
-menu) renders the lot as one page ordered the way a support ticket wants it, and **omits secrets by
-default** so it is safe to paste.
+*"at least this old"* and the app says exactly that rather than presenting a floor as a birthday. The
+client's real creation date, when available, is better than this in every way.
 
 ---
 
 ## Build
 
 ```powershell
-cd "C:\Users\marcr\Desktop\league-account-manager"
 dotnet build
-dotnet test                                             # 74 tests
+dotnet test                                  # 313 tests
 
 # Launch the built .exe directly. `dotnet run` cannot start it: the embedded
 # requireAdministrator manifest means the dev host has to go through UAC.
-.\src\LAM.Appin\Debug
-et9.0-windows10.0.19041.0\LeagueAccountManager.exe
+.\src\LAM.App\bin\Debug\net9.0-windows10.0.19041.0\LeagueAccountManager.exe
 
 # single self-contained .exe
 dotnet publish src/LAM.App -c Release -r win-x64 --self-contained `
@@ -210,14 +268,38 @@ dotnet publish src/LAM.App -c Release -r win-x64 --self-contained `
 ```
 
 ```
-src/LAM.Core     vault, crypto, Riot integration, login strategies   ← all the logic, unit-tested
+src/LAM.Core     vault, crypto, Riot integration, login strategies, fleet analysis  ← unit-tested
 src/LAM.App      WPF UI
 tools/LAM.Diag   lam-diag pre-flight checks
-tests/LAM.Tests  74 tests
+tests/LAM.Tests  313 tests
 ```
 
 If a Riot update ever breaks the field detection, the selectors and status phrases live in one file —
 `login-ui.json` beside the vault (`%APPDATA%\LeagueAccountManager`). It is a data fix, not a rebuild.
+
+---
+
+## Three things the client data gets wrong
+
+Recorded because each one silently produced a plausible, wrong number, and each is now commented and
+locked by a test.
+
+- **Counts are duplicated.** The game data ships `Jade_*` twins offset by 60,000 — champion `60001` is
+  a copy of `1`, skin `60001008` belongs to it. Counting them turns a 173-champion roster into 236 and
+  a 1,277-skin collection into 1,582. Most of the duplicate skins have no name at all, so they render
+  as bare id numbers.
+- **Epoch units differ per endpoint.** The catalogue reports acquisition dates in **seconds**; the
+  champions and alias endpoints report theirs in **milliseconds**. Reading one as the other dates an
+  entire collection to January 1970 — absurd in one direction, silent in the other.
+- **`freeToPlay` does not mean "not yours".** On the champions endpoint it marks the *current
+  rotation*, and a champion bought a decade ago is flagged in the week it is free. Filtering on it
+  deletes champions the account owns. The identically-shaped `f2p` on the *skin inventory* means the
+  opposite — a temporary grant — and filtering there is correct.
+
+There is also a readiness race worth knowing about: the lockfile appears well before the client has
+loaded its inventory, and an early read returns just the twenty champions of the free rotation. The
+client says when it is ready (`/lol-inventory/v1/initial-configuration-complete`), and a capture taken
+before then is refused rather than allowed to overwrite a good one.
 
 ---
 
@@ -228,10 +310,10 @@ If a Riot update ever breaks the field detection, the selectors and status phras
   The design keeps keystroke injection to once per account for exactly this reason. Your call.
 - **An account with 2FA can never be fully hands-free.** The app pauses and asks for the code rather
   than pretending otherwise.
-- **The theme is fully templated on purpose.** WPF's default control templates draw light chrome
-  and inherit whatever text colour you give them, so a dark style that only sets colours yields
-  unreadable text on a white popup. `ThemeTests` fails the build if a control style sets colours
-  without replacing its template.
+- **The theme is fully templated on purpose.** WPF's default control templates draw light chrome and
+  inherit whatever text colour you give them, so a dark style that only sets colours yields unreadable
+  text on a white popup. `ThemeTests` fails the build if a control style sets colours without
+  replacing its template.
 - **The master password cannot be recovered.** Take an encrypted export (**Settings → Backup**) and
   keep it somewhere other than this PC. Exports are deliberately *not* machine-bound so they open
   elsewhere — which makes the export passphrase the only thing protecting them. Use a strong one.
