@@ -1,0 +1,276 @@
+<Window x:Class="LAM.App.Views.AccountDetailWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Account" Height="720" Width="900" MinHeight="520" MinWidth="720"
+        Background="{StaticResource Background}"
+        WindowStartupLocation="CenterOwner">
+
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+    </Window.Resources>
+
+    <DockPanel>
+
+        <!-- ============ HEADER ============ -->
+        <Border DockPanel.Dock="Top" Background="{StaticResource Surface}"
+                BorderBrush="{StaticResource BorderBrushSoft}" BorderThickness="0,0,0,1" Padding="18,14">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <Border Grid.Column="0" Width="64" Height="64" CornerRadius="32"
+                        Background="{StaticResource SurfaceRaised}"
+                        BorderBrush="{Binding RankBrush}" BorderThickness="2" Margin="0,0,14,0">
+                    <Grid>
+                        <TextBlock Text="{Binding Initials}" FontSize="20" FontWeight="SemiBold"
+                                   Foreground="{StaticResource MutedText}"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   Visibility="{Binding ShowInitials, Converter={StaticResource BoolToVis}}" />
+                        <Ellipse Fill="{Binding IconBrush}"
+                                 Visibility="{Binding HasIcon, Converter={StaticResource BoolToVis}}" />
+                    </Grid>
+                </Border>
+
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding Title}" Style="{StaticResource Heading}" />
+                    <TextBlock Text="{Binding Subtitle}" Style="{StaticResource Muted}" Margin="0,2,0,0" />
+                    <TextBlock Text="{Binding RankText}" Foreground="{Binding RankBrush}"
+                               FontWeight="SemiBold" FontSize="13" Margin="0,5,0,0" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button x:Name="SignInButton" Content="Sign in" Style="{StaticResource PrimaryButton}"
+                            Click="OnSignIn" MinWidth="100" Margin="0,0,8,0"
+                            IsEnabled="{Binding CanSignIn}" ToolTip="{Binding SignInTooltip}" />
+                    <Button x:Name="RefreshButton" Content="Refresh" Click="OnRefreshFromClient"
+                            MinWidth="86" Margin="0,0,8,0"
+                            ToolTip="Re-read rank, collection, loot and recovery details from the running client. Only works while this account is the one signed in." />
+                    <Button Content="Edit" Click="OnEdit" MinWidth="80" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Border DockPanel.Dock="Bottom" Background="{StaticResource Surface}"
+                BorderBrush="{StaticResource BorderBrushSoft}" BorderThickness="0,1,0,0" Padding="18,7">
+            <TextBlock x:Name="StatusText" Style="{StaticResource Muted}" TextTrimming="CharacterEllipsis" />
+        </Border>
+
+        <TabControl Margin="14" Background="Transparent" BorderBrush="{StaticResource BorderBrushSoft}">
+
+            <!-- ============ OVERVIEW ============ -->
+            <TabItem Header="Overview">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="18">
+                        <TextBlock x:Name="OverviewText" FontFamily="Consolas" FontSize="12.5"
+                                   LineHeight="20" TextWrapping="Wrap" />
+                        <TextBlock x:Name="OverviewAsOf" Style="{StaticResource Muted}" Margin="0,14,0,0"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- ============ SKINS ============ -->
+            <TabItem Header="Skins">
+                <DockPanel Margin="14">
+                    <Grid DockPanel.Dock="Top" Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="SkinSearch" Grid.Column="0" MaxWidth="320"
+                                 HorizontalAlignment="Left" Width="300"
+                                 TextChanged="OnSkinSearchChanged"
+                                 ToolTip="Search by skin or champion name" />
+                        <TextBlock x:Name="SkinCountText" Grid.Column="1" Style="{StaticResource Muted}"
+                                   VerticalAlignment="Center" />
+                    </Grid>
+
+                    <!-- Rows rather than a WrapPanel: WrapPanel does not virtualize, and rendering
+                         1,500+ tiles eagerly hangs the window. Chunking into rows lets the built-in
+                         VirtualizingStackPanel realise only what is on screen. -->
+                    <ListBox x:Name="SkinList" Background="Transparent" BorderThickness="0"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             VirtualizingPanel.IsVirtualizing="True"
+                             VirtualizingPanel.VirtualizationMode="Recycling"
+                             ScrollViewer.CanContentScroll="True">
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem">
+                                <Setter Property="Focusable" Value="False" />
+                                <Setter Property="Padding" Value="0" />
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="ListBoxItem">
+                                            <ContentPresenter />
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <ItemsControl ItemsSource="{Binding Items}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Width="150" Margin="0,0,10,10" CornerRadius="6"
+                                                    Background="{StaticResource Surface}"
+                                                    BorderBrush="{StaticResource BorderBrushSoft}" BorderThickness="1">
+                                                <StackPanel>
+                                                    <Border Height="86" CornerRadius="6,6,0,0"
+                                                            Background="{StaticResource SurfaceRaised}">
+                                                        <Rectangle Fill="{Binding Tile}" RadiusX="6" RadiusY="6" />
+                                                    </Border>
+                                                    <StackPanel Margin="8,6,8,8">
+                                                        <TextBlock Text="{Binding Name}" FontSize="12"
+                                                                   FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                                        <TextBlock Text="{Binding ChampionName}" Style="{StaticResource Muted}"
+                                                                   FontSize="11" TextTrimming="CharacterEllipsis" />
+                                                        <TextBlock Text="{Binding RarityText}" FontSize="10"
+                                                                   Foreground="{StaticResource Warning}" Margin="0,3,0,0"
+                                                                   Visibility="{Binding HasRarity, Converter={StaticResource BoolToVis}}" />
+                                                    </StackPanel>
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
+            </TabItem>
+
+            <!-- ============ CHAMPIONS ============ -->
+            <TabItem Header="Champions">
+                <DockPanel Margin="14">
+                    <TextBlock x:Name="ChampionCountText" DockPanel.Dock="Top" Style="{StaticResource Muted}"
+                               Margin="0,0,0,10" />
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <ItemsControl x:Name="ChampionList">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Style="{StaticResource Chip}" Margin="0,0,6,6" Padding="9,4">
+                                        <TextBlock Text="{Binding}" FontSize="12" />
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </DockPanel>
+            </TabItem>
+
+            <!-- ============ LOOT ============ -->
+            <TabItem Header="Loot">
+                <DockPanel Margin="14">
+                    <TextBlock x:Name="LootSummaryText" DockPanel.Dock="Top" Style="{StaticResource Muted}"
+                               Margin="0,0,0,10" TextWrapping="Wrap" />
+
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <ItemsControl x:Name="LootList">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Margin="0,0,0,18">
+                                        <DockPanel Margin="0,0,0,8">
+                                            <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="13" />
+                                            <TextBlock Text="{Binding Summary}" Style="{StaticResource Muted}"
+                                                       FontSize="11" Margin="8,2,0,0" />
+                                        </DockPanel>
+
+                                        <ItemsControl ItemsSource="{Binding Items}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Border Width="150" Margin="0,0,10,10" CornerRadius="6"
+                                                            Background="{StaticResource Surface}"
+                                                            BorderBrush="{StaticResource BorderBrushSoft}"
+                                                            BorderThickness="1">
+                                                        <StackPanel>
+                                                            <Border Height="76" CornerRadius="6,6,0,0"
+                                                                    Background="{StaticResource SurfaceRaised}"
+                                                                    Visibility="{Binding WantsTile, Converter={StaticResource BoolToVis}}">
+                                                                <Grid>
+                                                                    <Rectangle Fill="{Binding Tile}" RadiusX="6" RadiusY="6" />
+                                                                    <Border Background="#AA000000" CornerRadius="4"
+                                                                            Padding="5,1" Margin="0,0,6,6"
+                                                                            HorizontalAlignment="Right"
+                                                                            VerticalAlignment="Bottom"
+                                                                            Visibility="{Binding HasCount, Converter={StaticResource BoolToVis}}">
+                                                                        <TextBlock Text="{Binding CountText}" FontSize="11"
+                                                                                   FontWeight="SemiBold" Foreground="White" />
+                                                                    </Border>
+                                                                </Grid>
+                                                            </Border>
+
+                                                            <StackPanel Margin="9,7,9,9">
+                                                                <TextBlock Text="{Binding Name}" FontSize="12"
+                                                                           FontWeight="SemiBold"
+                                                                           TextTrimming="CharacterEllipsis" />
+
+                                                                <!-- Currencies carry their number here instead of
+                                                                     on a tile they do not have. -->
+                                                                <TextBlock Text="{Binding CountText}" FontSize="16"
+                                                                           FontWeight="SemiBold" Margin="0,3,0,0"
+                                                                           Foreground="{StaticResource Accent}">
+                                                                    <TextBlock.Style>
+                                                                        <Style TargetType="TextBlock">
+                                                                            <Setter Property="Visibility" Value="Collapsed" />
+                                                                            <Style.Triggers>
+                                                                                <DataTrigger Binding="{Binding WantsTile}" Value="False">
+                                                                                    <Setter Property="Visibility" Value="Visible" />
+                                                                                </DataTrigger>
+                                                                            </Style.Triggers>
+                                                                        </Style>
+                                                                    </TextBlock.Style>
+                                                                </TextBlock>
+
+                                                                <TextBlock Text="{Binding RarityText}" FontSize="10"
+                                                                           Foreground="{StaticResource Warning}"
+                                                                           Margin="0,3,0,0"
+                                                                           Visibility="{Binding HasRarity, Converter={StaticResource BoolToVis}}" />
+                                                                <TextBlock Text="{Binding DisenchantText}" FontSize="10"
+                                                                           Style="{StaticResource Muted}" Margin="0,2,0,0"
+                                                                           Visibility="{Binding HasDisenchant, Converter={StaticResource BoolToVis}}" />
+                                                                <TextBlock Text="{Binding ExpiryText}" FontSize="10"
+                                                                           Foreground="{StaticResource Danger}" Margin="0,2,0,0"
+                                                                           Visibility="{Binding IsExpiring, Converter={StaticResource BoolToVis}}" />
+                                                            </StackPanel>
+                                                        </StackPanel>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </DockPanel>
+            </TabItem>
+
+            <!-- ============ RECOVERY ============ -->
+            <TabItem Header="Recovery">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="18">
+                        <Border Background="#224C8DFF" CornerRadius="6" Padding="12" Margin="0,0,0,14">
+                            <TextBlock TextWrapping="Wrap" Style="{StaticResource Muted}"
+                                       Text="What the client reports is shown beside what you typed. Observations never overwrite your entries — where they disagree, that is worth knowing about rather than silently resolving." />
+                        </Border>
+                        <TextBlock x:Name="RecoveryText" FontFamily="Consolas" FontSize="12.5"
+                                   LineHeight="20" TextWrapping="Wrap" />
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+        </TabControl>
+    </DockPanel>
+</Window>

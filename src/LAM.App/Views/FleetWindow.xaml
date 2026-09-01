@@ -1,0 +1,151 @@
+<Window x:Class="LAM.App.Views.FleetWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Fleet" Height="760" Width="1000" MinHeight="520" MinWidth="760"
+        Background="{StaticResource Background}"
+        WindowStartupLocation="CenterOwner">
+
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+    </Window.Resources>
+
+    <DockPanel>
+        <Border DockPanel.Dock="Top" Background="{StaticResource Surface}"
+                BorderBrush="{StaticResource BorderBrushSoft}" BorderThickness="0,0,0,1" Padding="18,14">
+            <StackPanel>
+                <TextBlock Text="Fleet" Style="{StaticResource Heading}" />
+                <TextBlock x:Name="HeadlineText" Style="{StaticResource Muted}" Margin="0,3,0,0"
+                           TextWrapping="Wrap" />
+            </StackPanel>
+        </Border>
+
+        <Border DockPanel.Dock="Bottom" Background="{StaticResource Surface}"
+                BorderBrush="{StaticResource BorderBrushSoft}" BorderThickness="0,1,0,0" Padding="18,7">
+            <TextBlock x:Name="StatusText" Style="{StaticResource Muted}" TextTrimming="CharacterEllipsis" />
+        </Border>
+
+        <TabControl Margin="14" Background="Transparent" BorderBrush="{StaticResource BorderBrushSoft}">
+
+            <!-- ============ FIND A SKIN ============ -->
+            <TabItem Header="Find a skin">
+                <DockPanel Margin="14">
+                    <StackPanel DockPanel.Dock="Top" Margin="0,0,0,12">
+                        <TextBlock Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,0,0,8"
+                                   Text="Search every account at once. Accounts that have never been signed into are left out of both columns — they cannot say what they own, and guessing would send you to buy something twice." />
+                        <TextBox x:Name="SkinSearch" Width="340" HorizontalAlignment="Left"
+                                 TextChanged="OnSearchChanged"
+                                 ToolTip="Search by skin name, e.g. Elementalist Lux" />
+                    </StackPanel>
+
+                    <ListBox x:Name="ResultsList" Background="Transparent" BorderThickness="0"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             VirtualizingPanel.IsVirtualizing="True"
+                             VirtualizingPanel.VirtualizationMode="Recycling">
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem">
+                                <Setter Property="Focusable" Value="False" />
+                                <Setter Property="Padding" Value="0" />
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="ListBoxItem">
+                                            <ContentPresenter />
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Border Margin="0,0,0,8" Padding="12" CornerRadius="6"
+                                        Background="{StaticResource Surface}"
+                                        BorderBrush="{StaticResource BorderBrushSoft}" BorderThickness="1">
+                                    <StackPanel>
+                                        <DockPanel>
+                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13" />
+                                            <TextBlock Text="{Binding ChampionAndPrice}" Style="{StaticResource Muted}"
+                                                       FontSize="11" Margin="10,2,0,0" />
+                                            <TextBlock Text="LEGACY" FontSize="10" FontWeight="SemiBold"
+                                                       Foreground="{StaticResource Warning}" Margin="10,2,0,0"
+                                                       Visibility="{Binding IsLegacy, Converter={StaticResource BoolToVis}}" />
+                                        </DockPanel>
+
+                                        <TextBlock Text="{Binding OwnersText}" Margin="0,7,0,0" FontSize="12"
+                                                   TextWrapping="Wrap" Foreground="{StaticResource Success}" />
+                                        <TextBlock Text="{Binding WithoutText}" Margin="0,3,0,0" FontSize="12"
+                                                   TextWrapping="Wrap" Style="{StaticResource Muted}" />
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
+            </TabItem>
+
+            <!-- ============ PORTFOLIO ============ -->
+            <TabItem Header="Portfolio">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="18">
+                        <TextBlock x:Name="PortfolioText" FontFamily="Consolas" FontSize="12.5"
+                                   LineHeight="20" TextWrapping="Wrap" />
+                        <Border Background="#224C8DFF" CornerRadius="6" Padding="12" Margin="0,14,0,0">
+                            <TextBlock TextWrapping="Wrap" Style="{StaticResource Muted}"
+                                       Text="RP figures are what these skins are priced at today, totalled up. That is not what was paid, and it is emphatically not what an account is worth — accounts are not transferable, and this tool takes no view on that." />
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- ============ TOOLS ============ -->
+            <TabItem Header="Tools">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="18">
+                        <TextBlock Text="Export" FontWeight="SemiBold" FontSize="13" Margin="0,0,0,6" />
+                        <TextBlock Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,0,0,8"
+                                   Text="Writes a spreadsheet of every account: names, regions, ranks, counts and dates. Never passwords, sessions or recovery secrets - not as an option." />
+                        <Button Content="Export fleet to CSV..." Click="OnExportCsv" HorizontalAlignment="Left"
+                                MinWidth="170" />
+
+                        <TextBlock Text="Repair the Riot client" FontWeight="SemiBold" FontSize="13"
+                                   Margin="0,22,0,6" />
+                        <TextBlock Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,0,0,8"
+                                   Text="For when the client has got itself stuck. Vanguard is never touched - it is a kernel anti-cheat, and interfering with it is what gets tools flagged." />
+                        <TextBlock x:Name="RepairStateText" Style="{StaticResource Muted}" TextWrapping="Wrap"
+                                   Margin="0,0,0,10" FontFamily="Consolas" FontSize="12" />
+
+                        <StackPanel Orientation="Horizontal">
+                            <Button Content="Close clients" Click="OnCloseClients" MinWidth="130" Margin="0,0,8,0" />
+                            <Button Content="Clear stale lockfiles" Click="OnClearLockfiles" MinWidth="160"
+                                    Margin="0,0,8,0" />
+                            <Button Content="Clear browser cache" Click="OnClearCache" MinWidth="160" />
+                        </StackPanel>
+
+                        <TextBlock Text="Folders" FontWeight="SemiBold" FontSize="13" Margin="0,22,0,6" />
+                        <ItemsControl x:Name="FolderList">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Button Content="{Binding Name}" Tag="{Binding Path}" Click="OnOpenFolder"
+                                            Margin="0,0,8,8" MinWidth="140" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- ============ HEALTH ============ -->
+            <TabItem Header="Health">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="18">
+                        <TextBlock x:Name="HealthText" FontFamily="Consolas" FontSize="12.5"
+                                   LineHeight="20" TextWrapping="Wrap" />
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+        </TabControl>
+    </DockPanel>
+</Window>

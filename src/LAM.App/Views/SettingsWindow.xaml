@@ -1,0 +1,172 @@
+<Window x:Class="LAM.App.Views.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Settings" Height="700" Width="640"
+        Background="{StaticResource Background}"
+        WindowStartupLocation="CenterOwner">
+
+    <DockPanel Margin="18">
+
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+            <Button Content="Done" Style="{StaticResource PrimaryButton}" Click="OnDone" MinWidth="110" />
+        </StackPanel>
+
+        <TabControl Background="Transparent" BorderBrush="{StaticResource BorderBrushSoft}">
+
+            <TabItem Header="Security">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="16">
+
+                        <Label Content="Lock after this many minutes idle" />
+                        <TextBox x:Name="AutoLockBox" Width="90" HorizontalAlignment="Left" />
+                        <TextBlock Style="{StaticResource Muted}" Margin="0,4,0,14"
+                                   Text="0 disables the idle timer." />
+
+                        <CheckBox x:Name="LockOnWorkstationBox" Content="Lock when Windows locks" />
+                        <CheckBox x:Name="LockOnMinimizeBox" Content="Lock when the window is minimised" />
+
+                        <CheckBox x:Name="AbortOnFocusLossBox" Margin="0,10,0,0"
+                                  Content="Stop typing if another window takes focus" />
+                        <TextBlock Style="{StaticResource Muted}" Margin="22,2,0,14" TextWrapping="Wrap"
+                                   Text="Leave this on. It is what stops half your password being typed into whatever you alt-tabbed to." />
+
+                        <Separator Margin="0,10" Background="{StaticResource BorderBrushSoft}" />
+
+                        <TextBlock Text="Windows Hello" FontWeight="SemiBold" Margin="0,0,0,6" />
+                        <TextBlock x:Name="HelloStatus" Style="{StaticResource Muted}" TextWrapping="Wrap"
+                                   Margin="0,0,0,8" />
+                        <StackPanel Orientation="Horizontal">
+                            <Button x:Name="HelloEnableButton" Content="Enable Windows Hello"
+                                    Click="OnEnableHello" Margin="0,0,8,0" />
+                            <Button x:Name="HelloDisableButton" Content="Remove Hello" Click="OnDisableHello" />
+                        </StackPanel>
+
+                        <Separator Margin="0,14" Background="{StaticResource BorderBrushSoft}" />
+
+                        <TextBlock Text="Master password" FontWeight="SemiBold" Margin="0,0,0,6" />
+                        <TextBlock Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,0,0,8"
+                                   Text="Changing it re-encrypts the vault immediately. The old password stops working straight away." />
+                        <Button Content="Change master password…" Click="OnChangeMasterPassword"
+                                HorizontalAlignment="Left" />
+
+                        <Separator Margin="0,14" Background="{StaticResource BorderBrushSoft}" />
+
+                        <CheckBox x:Name="MachineBoundBox" Content="Bind this vault to this Windows profile" />
+                        <TextBlock Style="{StaticResource Muted}" Margin="22,2,0,0" TextWrapping="Wrap"
+                                   Text="On: a copied vault.dat is useless on any other machine, even with the master password. Turn it off only if you keep the vault on a synced drive — and take an encrypted export either way." />
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="Signing in">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="16">
+
+                        <Label Content="How to sign in" />
+                        <ComboBox x:Name="StrategyBox" Width="330" HorizontalAlignment="Left" />
+                        <TextBlock x:Name="StrategyHelp" Style="{StaticResource Muted}" Margin="0,6,0,14"
+                                   TextWrapping="Wrap" />
+
+                        <CheckBox x:Name="LaunchGameBox" Content="Start League after signing in" />
+                        <TextBlock Style="{StaticResource Muted}" Margin="22,2,0,14" TextWrapping="Wrap"
+                                   Text="Presses Play once you are signed in. Also how the app reads each account's Riot ID, rank and level — those come from the League client, which only exists once the game is launched." />
+
+                        <Label Content="Seconds to wait for the Riot Client" />
+                        <TextBox x:Name="TimeoutBox" Width="90" HorizontalAlignment="Left" />
+                        <TextBlock Style="{StaticResource Muted}" Margin="0,4,0,14" TextWrapping="Wrap"
+                                   Text="Raise this if the client is slow to start on your machine." />
+
+                        <Separator Margin="0,6,0,14" Background="{StaticResource BorderBrushSoft}" />
+
+                        <TextBlock Text="League settings" FontWeight="SemiBold" Margin="0,0,0,6" />
+                        <CheckBox x:Name="CarrySettingsBox" Content="Keep my keybinds and settings across accounts" />
+                        <TextBlock Style="{StaticResource Muted}" Margin="22,2,0,8" TextWrapping="Wrap"
+                                   Text="League stores hotkeys, HUD and video options per account and resets them on every switch. Save your preferred setup once and it is restored after each sign-in." />
+                        <TextBlock x:Name="SettingsProfileStatus" Style="{StaticResource Muted}" Margin="22,0,0,8"
+                                   TextWrapping="Wrap" />
+                        <StackPanel Orientation="Horizontal" Margin="22,0,0,6">
+                            <Button Content="Save current settings" Click="OnSaveGameSettings" Margin="0,0,8,0" />
+                            <Button Content="Revert to originals" Style="{StaticResource DangerButton}"
+                                    Click="OnRevertGameSettings" />
+                        </StackPanel>
+                        <TextBlock Style="{StaticResource Muted}" Margin="22,0,0,14" TextWrapping="Wrap"
+                                   Text="Close League before saving or reverting — it holds these files open and rewrites them on exit. A pristine copy is kept from before this app ever touched them, which is what Revert restores." />
+
+                        <Separator Margin="0,6,0,14" Background="{StaticResource BorderBrushSoft}" />
+
+                        <Label Content="Riot Client path" />
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="ClientPathBox" Grid.Column="0" />
+                            <Button Grid.Column="1" Content="Browse…" Margin="8,0,0,0" Click="OnBrowseClient" />
+                        </Grid>
+                        <TextBlock x:Name="ClientPathStatus" Style="{StaticResource Muted}" Margin="0,4,0,0"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="Riot API">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="16">
+
+                        <Border Background="#224FBF7B" CornerRadius="6" Padding="12" Margin="0,0,0,16">
+                            <TextBlock TextWrapping="Wrap" Style="{StaticResource Muted}"
+                                       Text="You probably do not need this. Rank, level, wallet, champions and honour are read straight from the League client when you sign in — no key, no rate limits, nothing to expire. A key only adds two things: refreshing accounts you are NOT currently signed into, and the account-age estimate." />
+                        </Border>
+
+                        <Label Content="API key" />
+                        <PasswordBox x:Name="ApiKeyBox" />
+                        <TextBlock Style="{StaticResource Muted}" Margin="0,6,0,12" TextWrapping="Wrap"
+                                   Text="Get one at developer.riotgames.com. Register a Personal key — Development keys expire every 24 hours, which would mean re-pasting this daily." />
+
+                        <Button x:Name="TestKeyButton" Content="Test key" Click="OnTestKey"
+                                HorizontalAlignment="Left" MinWidth="110" />
+                        <TextBlock x:Name="KeyTestResult" Style="{StaticResource Muted}" Margin="0,10,0,0"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="Backup">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="16">
+
+                        <TextBlock Text="Portable export" FontWeight="SemiBold" Margin="0,0,0,6" />
+                        <TextBlock Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,0,0,10"
+                                   Text="Writes a single .lamvault file encrypted under a passphrase you choose. Deliberately not tied to this machine, so it opens on another PC — which also means the passphrase is the only thing protecting it. Make it a strong one." />
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                            <Button Content="Export…" Click="OnExport" Margin="0,0,8,0" MinWidth="110" />
+                            <Button Content="Import…" Click="OnImport" MinWidth="110" />
+                        </StackPanel>
+
+                        <Separator Margin="0,4,0,14" Background="{StaticResource BorderBrushSoft}" />
+
+                        <Label Content="Automatic backups to keep" />
+                        <TextBox x:Name="BackupsBox" Width="90" HorizontalAlignment="Left" />
+                        <TextBlock Style="{StaticResource Muted}" Margin="0,4,0,10" TextWrapping="Wrap"
+                                   Text="A copy is taken before every save. These live beside the vault and are encrypted the same way." />
+
+                        <TextBlock x:Name="BackupStatus" Style="{StaticResource Muted}" TextWrapping="Wrap" />
+                        <Button Content="Open vault folder" Click="OnOpenFolder" HorizontalAlignment="Left"
+                                Margin="0,10,0,0" />
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="Diagnostics">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="16">
+                        <TextBlock x:Name="DiagnosticsText" FontFamily="Consolas" FontSize="12"
+                                   TextWrapping="Wrap" LineHeight="19" />
+                        <Button Content="Re-check" Click="OnRefreshDiagnostics" HorizontalAlignment="Left"
+                                Margin="0,14,0,0" />
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+        </TabControl>
+    </DockPanel>
+</Window>

@@ -1,0 +1,35 @@
+# ---- build output -------------------------------------------------------
+bin/
+obj/
+publish/
+*.user
+*.suo
+.vs/
+
+# ---- never commit, whatever the folder ----------------------------------
+# The vault itself lives in %APPDATA%\LeagueAccountManager and is not in this
+# tree at all. These rules exist so that a copy dropped here by accident — for
+# a bug report, a restore test, a quick look at a backup — cannot be committed.
+vault.dat
+vault-*.dat
+hello.bin
+*.pfx
+*.p12
+*.key
+.env
+.env.*
+
+# Captured Riot state. RiotGamesPrivateSettings.yaml holds a live session token,
+# and a lockfile holds the local API password.
+RiotGamesPrivateSettings.yaml
+lockfile
+
+# Cached client data: several megabytes, machine-specific, and rebuilt on demand.
+catalogue.json
+icons/
+tiles/
+
+# Login traces. They carry no secrets by design, but they do record which
+# accounts were used and when.
+login.log
+logs/
