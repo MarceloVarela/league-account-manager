@@ -100,6 +100,14 @@ public sealed class IdentitySnapshot
     /// </summary>
     public Riot.LootSnapshot? Loot { get; set; }
 
+    /// <summary>
+    /// Recent ranked results, and the only honest "last played" the app has.
+    ///
+    /// Everything else dates an account from LastUsedUtc, which records when this app last touched
+    /// it — so an account played daily outside the manager still looks dormant.
+    /// </summary>
+    public Riot.MatchSnapshot? Matches { get; set; }
+
     /// <summary>Skins this account owns, by id. Names and art come from the shared catalogue.</summary>
     public int[] OwnedSkinIds { get; set; } = [];
 

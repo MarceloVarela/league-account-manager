@@ -76,8 +76,13 @@ public sealed class AutofillStrategy : ILoginStrategy
         PrepareSessionState(context);
         ApplyRegion(context);
 
+        // As above: before the launch, or not at all.
+        var stealth = context.BeginStealth is null
+            ? string.Empty
+            : await context.BeginStealth(cancellationToken);
+
         context.Report(LoginStage.LaunchingClient, "Starting the Riot Client…");
-        _launcher.Launch();
+        _launcher.Launch(extraArguments: stealth);
 
         using var inspector = new RiotWindowInspector(_profile);
 

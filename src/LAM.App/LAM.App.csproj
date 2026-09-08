@@ -7,11 +7,25 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
     <LangVersion>latest</LangVersion>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AssemblyName>LeagueAccountManager</AssemblyName>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <ApplicationIcon>Assets\hextech.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <!--
+    WindowsForms is enabled for exactly one type: NotifyIcon, which WPF has no equivalent of and
+    which the tray icon needs. Its implicit usings are removed again, because pulling
+    System.Windows.Forms and System.Drawing into every file makes Application, Brush, UserControl,
+    KeyEventArgs and a dozen more ambiguous against their WPF namesakes across the whole project.
+    The two files that want them import them explicitly.
+  -->
+  <ItemGroup>
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\LAM.Core\LAM.Core.csproj" />
@@ -19,6 +33,32 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Win32.SystemEvents" Version="9.0.0" />
+  </ItemGroup>
+
+  <!--
+    Barlow and Barlow Condensed, bundled rather than fetched.
+
+    A design that depends on a font must ship it: a machine without Barlow would silently fall back
+    to whatever WPF picks, and the condensed headings — which carry the whole look — would render at
+    a completely different width. Both are SIL Open Font License; OFL.txt travels with them, which
+    the licence requires.
+  -->
+  <ItemGroup>
+    <Resource Include="Assets\Fonts\*.ttf" />
+    <Resource Include="Assets\hextech.ico" />
+
+    <!--
+      The stealth certificate, shipped so a fresh install works before it can reach the refresh URL.
+
+      Its private key is PUBLIC by design — that is the whole model. It is safe only because the one
+      hostname it vouches for resolves to 127.0.0.1, so it can never be used to intercept anything but
+      a connection the user's own machine makes to itself. It must never be a wildcard, and it must
+      never be reused for anything else.
+    -->
+    <Resource Include="Assets\stealth.pfx" />
+    <Resource Include="Assets\hextech-512.png" />
+    <Resource Include="Assets\hextech-small.png" />
+    <None Include="Assets\Fonts\OFL.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

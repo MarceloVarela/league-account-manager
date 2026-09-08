@@ -1,3 +1,4 @@
+using System.IO;
 using LAM.Core.Login;
 using LAM.Core.Riot;
 using LAM.Core.Vault;
@@ -35,8 +36,10 @@ public sealed class AppServices
         Capture.UseGameStarter(GameStarter);
         StatsProbe = new ClientStatsProbe(RiotPaths);
         LootProbe = new ClientLootProbe(RiotPaths);
+        MatchProbe = new ClientMatchProbe(RiotPaths);
         Repair = new ClientRepair(RiotPaths, Processes);
         Capture.UseLootProbe(LootProbe);
+        Capture.UseMatchProbe(MatchProbe);
         Capture.UseAccountProbe(AccountProbe);
         GameSettings = new GameSettingsProfile(RiotPaths, Paths.GameSettingsDirectory, Trace.Write);
         Capture.UseStatsProbe(StatsProbe);
@@ -44,6 +47,23 @@ public sealed class AppServices
 
         Orchestrator = LoginOrchestrator.CreateDefault(
             RiotPaths, Yaml, Processes, Launcher, Capture, UiProfile, clock: null, trace: Trace);
+
+        // Stealth is opt-in, off by default, and unavailable until the build is pointed at a real
+        // hostname and certificate. Everything about it fails open: a null session simply means the
+        // client launches exactly as it always has.
+        Orchestrator.UseStealth((settings, token) =>
+            LAM.Core.Stealth.StealthEndpoints.Configured
+                ? LAM.Core.Stealth.StealthSession.TryStartAsync(
+                    new LAM.Core.Stealth.StealthOptions(
+                        LAM.Core.Stealth.StealthEndpoints.Host,
+                        LAM.Core.Stealth.StealthEndpoints.CertificateUrl,
+                        Path.Combine(Paths.Root, "stealth.pfx"),
+                        EmbeddedCertificate()),
+                    () => settings.StealthMode,
+                    () => settings.LobbyChat,
+                    Trace.Write,
+                    token)
+                : Task.FromResult<LAM.Core.Stealth.StealthSession?>(null));
     }
 
     public VaultPaths Paths { get; }
@@ -65,6 +85,8 @@ public sealed class AppServices
     public SkinArtCache SkinArt { get; }
     public ClientStatsProbe StatsProbe { get; }
     public ClientLootProbe LootProbe { get; }
+
+    public ClientMatchProbe MatchProbe { get; }
     public ClientRepair Repair { get; }
     public GameSettingsProfile GameSettings { get; }
     public LoginOrchestrator Orchestrator { get; }
@@ -74,4 +96,30 @@ public sealed class AppServices
     /// takes effect without a restart.
     /// </summary>
     public AppServices WithRiotClientPath(string? path) => new(Paths.Root, path);
+
+    /// <summary>
+    /// The certificate shipped with this build, if there is one.
+    ///
+    /// A fresh install has to work before it can reach the refresh URL, and a user behind a filter
+    /// that blocks it should still get stealth for as long as this copy is valid. Absent until the
+    /// asset is added, which is why every caller treats null as ordinary.
+    /// </summary>
+    private static byte[]? EmbeddedCertificate()
+    {
+        try
+        {
+            var stream = System.Windows.Application.GetResourceStream(
+                new Uri("pack://application:,,,/Assets/stealth.pfx"))?.Stream;
+
+            if (stream is null) return null;
+
+            using var memory = new MemoryStream();
+            stream.CopyTo(memory);
+            return memory.ToArray();
+        }
+        catch (Exception ex) when (ex is IOException or NotSupportedException or UriFormatException)
+        {
+            return null;
+        }
+    }
 }

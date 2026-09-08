@@ -1,3 +1,4 @@
+using LAM.App.Views;
 using System.Windows;
 using System.Windows.Threading;
 
@@ -16,11 +17,10 @@ public partial class App : Application
 
     private void OnUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
     {
-        MessageBox.Show(
-            e.Exception.Message,
+        Dialog.Say(
+            null,
             "Something went wrong",
-            MessageBoxButton.OK,
-            MessageBoxImage.Warning);
+            e.Exception.Message);
 
         e.Handled = true;
     }

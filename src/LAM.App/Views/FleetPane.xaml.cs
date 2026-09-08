@@ -19,12 +19,12 @@ namespace LAM.App.Views;
 /// These are the questions a per-account view cannot answer and no competing tool can either: every
 /// companion app attaches to whichever client is running, so it only ever sees one account.
 /// </summary>
-public partial class FleetWindow : Window
+public partial class FleetPane : UserControl
 {
     private readonly IReadOnlyList<AccountEntry> _accounts;
     private readonly AppServices _services;
 
-    public FleetWindow(IReadOnlyList<AccountEntry> accounts, AppServices services)
+    public FleetPane(IReadOnlyList<AccountEntry> accounts, AppServices services)
     {
         InitializeComponent();
 

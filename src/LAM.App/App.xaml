@@ -5,7 +5,12 @@
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
+                <!-- Palette first: Theme and ShellChrome both look tokens up out of it.
+                     Dark is the design's home state. Swapped at runtime by ThemeSwitcher, which reads
+                     ThemePreference before the lock screen paints; this is only the fallback. -->
+                <ResourceDictionary Source="Themes/Dark.xaml" />
                 <ResourceDictionary Source="Theme.xaml" />
+                <ResourceDictionary Source="Views/ShellChrome.xaml" />
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </Application.Resources>

@@ -1,0 +1,140 @@
+<!--
+    Light palette. Cool blue, not neutral grey: the ground carries a blue cast throughout.
+
+    TOKENS ONLY. No call site anywhere in the app may hard-code a colour: the whole point of the split
+    is that the other dictionary can be swapped in at runtime and everything follows. Both files carry
+    exactly the same keys, which a test enforces.
+
+    Two families are NOT derived from ink, which is what the previous draft got wrong:
+
+      * Rules, frames and marks come off a blue-grey (rgba(20,50,80,a)) at fixed alphas. Derived from ink
+        they give a neutral grey frame, which reads as a different design entirely.
+      * Hover and active tints come off the ACCENT, not off ink.
+
+    Rank colour is deliberately absent from the chrome tokens and present as its own 14-brush table at
+    the bottom. Chrome stays blue; rank owns the spectrum. That contrast is what makes a grid of nine
+    accounts read as nine accounts instead of one blue wall.
+-->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- Raw colours, for gradient stops, shadow effects and animation targets. -->
+    <Color x:Key="GroundColor">#f4f6f8</Color>
+    <Color x:Key="SurfaceColor">#e9edf1</Color>
+    <Color x:Key="RaisedSurfaceColor">#eaeff4</Color>
+    <Color x:Key="InkColor">#141c24</Color>
+    <Color x:Key="AccentColor">#1e5b87</Color>
+    <Color x:Key="AccentSolidColor">#226fa6</Color>
+    <Color x:Key="AccentHoverColor">#2a83c0</Color>
+    <Color x:Key="OnAccentColor">#f4f8fb</Color>
+    <Color x:Key="GoldColor">#6b5214</Color>
+    <Color x:Key="NameColor">#16232e</Color>
+    <Color x:Key="OkColor">#0f7048</Color>
+    <Color x:Key="WarnFgColor">#8a4a08</Color>
+    <Color x:Key="KnobOffColor">#adb7c2</Color>
+    <Color x:Key="TagBgColor">#e3eef7</Color>
+    <Color x:Key="TagFgColor">#17456a</Color>
+    <Color x:Key="PlateBgColor">#141c24</Color>
+    <Color x:Key="OnPlateColor">#f4f6f8</Color>
+    <Color x:Key="ToastDotColor">#5fb6e8</Color>
+    <Color x:Key="ShadowColor">#102030</Color>
+    <Color x:Key="GlowColor">#00000000</Color>
+
+    <!-- The three-surface ladder: ground, chrome bands, raised plates. -->
+    <SolidColorBrush x:Key="Ground" Color="#f4f6f8" />
+    <SolidColorBrush x:Key="Surface" Color="#e9edf1" />
+    <SolidColorBrush x:Key="RaisedSurface" Color="#eaeff4" />
+    <SolidColorBrush x:Key="Ink" Color="#141c24" />
+
+    <!-- Metadata. 70% ink is the measured floor; never lighter. -->
+    <SolidColorBrush x:Key="MutedText" Color="#141c24" Opacity="0.70" />
+    <SolidColorBrush x:Key="SubtleText" Color="#141c24" Opacity="0.70" />
+
+    <!-- Rules, frames and marks: the blue-grey base, NOT ink. -->
+    <SolidColorBrush x:Key="Divider" Color="#143250" Opacity="0.18" />
+    <SolidColorBrush x:Key="RuleLight" Color="#143250" Opacity="0.10" />
+    <SolidColorBrush x:Key="RuleFaint" Color="#143250" Opacity="0.10" />
+    <SolidColorBrush x:Key="ShellBorder" Color="#143250" Opacity="0.30" />
+    <SolidColorBrush x:Key="DashedBorder" Color="#143250" Opacity="0.30" />
+    <SolidColorBrush x:Key="CheckBorder" Color="#143250" Opacity="0.30" />
+    <SolidColorBrush x:Key="RegMark" Color="#143250" Opacity="0.40" />
+    <SolidColorBrush x:Key="InactiveFill" Color="#143250" Opacity="0.12" />
+    <SolidColorBrush x:Key="LossBar" Color="#143250" Opacity="0.26" />
+    <SolidColorBrush x:Key="ToggleKnobOff" Color="#adb7c2" />
+
+    <!-- Accent: the deeper step carries text, the solid one carries fills. -->
+    <SolidColorBrush x:Key="Accent" Color="#1e5b87" />
+    <SolidColorBrush x:Key="AccentSolid" Color="#226fa6" />
+    <SolidColorBrush x:Key="AccentHover" Color="#2a83c0" />
+    <SolidColorBrush x:Key="AccentPressed" Color="#226fa6" />
+    <SolidColorBrush x:Key="Reversed" Color="#f4f8fb" />
+
+    <!-- tint-1/2/3: hover, active, selected. Off the accent, weakest first. -->
+    <SolidColorBrush x:Key="CardHover" Color="#226fa6" Opacity="0.09" />
+    <SolidColorBrush x:Key="PartRailFill" Color="#226fa6" Opacity="0.09" />
+    <SolidColorBrush x:Key="RowHover" Color="#226fa6" Opacity="0.13" />
+    <SolidColorBrush x:Key="FlyoutRowHover" Color="#226fa6" Opacity="0.13" />
+    <SolidColorBrush x:Key="TabActiveFill" Color="#226fa6" Opacity="0.13" />
+    <SolidColorBrush x:Key="SegmentSelected" Color="#226fa6" Opacity="0.18" />
+    <SolidColorBrush x:Key="ToggleOnTrack" Color="#226fa6" Opacity="0.18" />
+
+    <!-- Neutral hovers, for chrome that must not take the accent. -->
+    <SolidColorBrush x:Key="SecondaryHover" Color="#141c24" Opacity="0.06" />
+    <SolidColorBrush x:Key="ChromeHover" Color="#141c24" Opacity="0.06" />
+    <SolidColorBrush x:Key="CloseHover" Color="#141c24" Opacity="0.12" />
+
+    <!--
+        The semantic hues. Each means exactly one thing; spending them decoratively is what makes an
+        interface look like a dashboard demo.
+    -->
+    <!-- Account names. Parchment, so identity separates from blue chrome and coloured ranks. -->
+    <SolidColorBrush x:Key="Name" Color="#16232e" />
+    <!-- Vault open, client detected. The healthy dots, and nothing else. -->
+    <SolidColorBrush x:Key="Ok" Color="#0f7048" />
+    <!-- Restrictions and 2FA: warning text, the triangle, the edge bar. -->
+    <SolidColorBrush x:Key="WarnFg" Color="#8a4a08" />
+    <!-- LP values, the LIVE badge, the live card's left edge. The only warm colour. -->
+    <SolidColorBrush x:Key="Gold" Color="#6b5214" />
+    <SolidColorBrush x:Key="OnGold" Color="#fdf6e4" />
+    <!-- Reserved for Valorant emphasis. -->
+    <SolidColorBrush x:Key="Val" Color="#a8322c" />
+
+    <!-- Tags. -->
+    <SolidColorBrush x:Key="AccentTint100" Color="#e3eef7" />
+    <SolidColorBrush x:Key="AccentTint800" Color="#17456a" />
+
+    <!-- Warnings are a solid plate with an edge bar, never text on a pattern. -->
+    <SolidColorBrush x:Key="WarnBg" Color="#141c24" Opacity="0.05" />
+    <SolidColorBrush x:Key="HazardBorder" Color="#143250" Opacity="0.18" />
+
+    <!-- Overlays, and the toast plate, which inverts against the ground. -->
+    <SolidColorBrush x:Key="LoginOverlay" Color="#f4f6f8" Opacity="0.94" />
+    <SolidColorBrush x:Key="Scrim" Color="#101a24" Opacity="0.50" />
+    <SolidColorBrush x:Key="TrayScrim" Color="#101a24" Opacity="0.42" />
+    <SolidColorBrush x:Key="PlateBg" Color="#141c24" />
+    <SolidColorBrush x:Key="OnPlate" Color="#f4f6f8" />
+    <SolidColorBrush x:Key="ToastDot" Color="#5fb6e8" />
+
+    <!--
+        Rank tier colours. Fourteen tiers, matched on the first word of the rank string.
+
+        Each drives three things at once: the rank text, the 3px bar across the top of the card, and
+        the LP rule fill. The light values are deep steps, not the dark ones dimmed: small text has to
+        clear 4.5:1, and dark Challenger cyan measures about 1.9:1 on a light plate.
+    -->
+    <SolidColorBrush x:Key="TierIron" Color="#5f646b" />
+    <SolidColorBrush x:Key="TierBronze" Color="#7d5230" />
+    <SolidColorBrush x:Key="TierSilver" Color="#5c6b78" />
+    <SolidColorBrush x:Key="TierGold" Color="#8a6a14" />
+    <SolidColorBrush x:Key="TierPlatinum" Color="#0f6f68" />
+    <SolidColorBrush x:Key="TierEmerald" Color="#12703f" />
+    <SolidColorBrush x:Key="TierDiamond" Color="#2a5fa8" />
+    <SolidColorBrush x:Key="TierMaster" Color="#6a3a94" />
+    <SolidColorBrush x:Key="TierGrandmaster" Color="#a3302a" />
+    <SolidColorBrush x:Key="TierChallenger" Color="#1a6f8f" />
+    <SolidColorBrush x:Key="TierImmortal" Color="#a3302a" />
+    <SolidColorBrush x:Key="TierAscendant" Color="#12703f" />
+    <SolidColorBrush x:Key="TierRadiant" Color="#8a6a14" />
+    <SolidColorBrush x:Key="TierUnranked" Color="#5f646b" />
+
+</ResourceDictionary>

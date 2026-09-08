@@ -74,23 +74,25 @@ public partial class AccountDetailWindow : Window
     {
         var identity = _account.Identity;
         var stats = identity.ClientStats;
-        var text = new StringBuilder();
+        var text = new Readout(OverviewText);
 
-        void Line(string label, string? value)
-            => text.AppendLine(label.PadRight(22) + (string.IsNullOrWhiteSpace(value) ? "—" : value));
+        // Only the rows that prove ownership take the accent. Of this whole tab that is three: the
+        // PUUID, whether Riot still has the account enabled, and which regions it has lived on.
+        void Line(string label, string? value, bool key = false)
+            => text.Pair(label, 22, value, key);
 
         Line("Riot ID", identity.GameName is null ? null : identity.GameName + "#" + identity.TagLine);
         Line("Region", RiotRegions.DisplayFor(_account.Region) + " (" + _account.Region + ")");
         Line("Level", identity.SummonerLevel?.ToString());
-        Line("Riot account id", identity.RiotAccountId);
+        Line("Riot account id", identity.RiotAccountId, key: true);
 
-        text.AppendLine();
+        text.Blank();
         Line("Solo queue", Describe(identity.SoloRank));
         Line("Flex queue", Describe(identity.FlexRank));
         Line("Peak tier", stats?.PeakTier);
         Line("Last season ended", stats?.PreviousSeasonPeak);
 
-        text.AppendLine();
+        text.Blank();
         Line("Riot Points", stats?.RiotPoints?.ToString("N0"));
         Line("Blue Essence", stats?.BlueEssence?.ToString("N0"));
         Line("Champions owned", stats?.ChampionsOwned?.ToString());
@@ -114,14 +116,14 @@ public partial class AccountDetailWindow : Window
 
         if (identity.Observed is { } observed)
         {
-            text.AppendLine();
-            Line("Account state", observed.AccountState);
+            text.Blank();
+            Line("Account state", observed.AccountState, key: true);
             Line("Regions seen", observed.Regions.Count == 0
                 ? null
-                : string.Join(", ", observed.Regions.Select(r => r.ToString())));
+                : string.Join(", ", observed.Regions.Select(r => r.ToString())), key: true);
         }
 
-        text.AppendLine();
+        text.Blank();
         if (_account.Session is { } session)
         {
             Line("Saved session", session.IsProbablyUsable(DateTimeOffset.UtcNow)
@@ -133,7 +135,7 @@ public partial class AccountDetailWindow : Window
             Line("Saved session", "none yet");
         }
 
-        OverviewText.Text = text.ToString();
+        text.Done();
 
         // These come from the client, which can only be asked about the account it is signed into.
         // Saying when they were taken keeps the window honest about what it is showing.
@@ -158,28 +160,26 @@ public partial class AccountDetailWindow : Window
     {
         var recovery = _account.Recovery;
         var observed = _account.Identity.Observed;
-        var text = new StringBuilder();
+        var text = new Readout(RecoveryText);
 
-        void Row(string label, string? typed, string? seen)
-        {
-            text.AppendLine(label.PadRight(24)
-                            + ("you: " + (string.IsNullOrWhiteSpace(typed) ? "—" : typed)).PadRight(38)
-                            + "client: " + (string.IsNullOrWhiteSpace(seen) ? "—" : seen));
-        }
+        void Row(string label, string? typed, string? seen, bool key = false)
+            => text.Compare(label, 24, typed, 38, seen, key);
 
-        Row("Registered email", recovery.Email, observed?.MaskedEmail);
-        Row("Phone", recovery.PhoneNumber, observed?.MaskedPhone ?? (observed?.PhoneOnFile == true ? "on file" : null));
+        Row("Registered email", recovery.Email, observed?.MaskedEmail, key: true);
+        Row("Phone", recovery.PhoneNumber,
+            observed?.MaskedPhone ?? (observed?.PhoneOnFile == true ? "on file" : null), key: true);
         Row("Two-factor", recovery.MfaEnabled ? "yes" : "no", observed?.MfaEnabled == true ? "enabled" : null);
         Row("Created", recovery.ApproximateCreated?.ToString("d MMM yyyy"),
-            observed?.CreatedUtc?.UtcDateTime.ToString("d MMM yyyy"));
+            observed?.CreatedUtc?.UtcDateTime.ToString("d MMM yyyy"), key: true);
         Row("Country", null, observed?.Country);
 
         // Read straight from the client, and exactly what a Riot Support ticket asks for.
-        text.AppendLine();
-        text.AppendLine("From the client — the answers a recovery form wants:");
+        text.Blank();
+        text.Plain("From the client — the answers a recovery form wants:", "Ink");
 
-        void Fact(string label, string? value)
-            => text.AppendLine("  " + label.PadRight(24) + (string.IsNullOrWhiteSpace(value) ? "—" : value));
+        // This block IS the recovery form, so most of it is key material.
+        void Fact(string label, string? value, bool key = true)
+            => text.Pair("  " + label, 26, value, key);
 
         Fact("Account created", observed?.CreatedUtc?.UtcDateTime.ToString("d MMM yyyy"));
         Fact("First champion bought", DescribeFirstChampion());
@@ -188,7 +188,7 @@ public partial class AccountDetailWindow : Window
         Fact("Original region", observed?.OriginalPlatform);
         Fact("Regions seen", observed is null || observed.Regions.Count == 0
             ? null
-            : string.Join(", ", observed.Regions.Select(r => r.ToString())));
+            : string.Join(", ", observed.Regions.Select(r => r.ToString())), key: false);
         Fact("Legacy account id", observed?.LegacyAccountId);
         Fact("Riot account id", _account.Identity.RiotAccountId);
         Fact("Account state", observed?.AccountState);
@@ -200,9 +200,9 @@ public partial class AccountDetailWindow : Window
         {
             // Riot's own record, with the date each name was taken - strictly better than the names
             // this app happened to observe, which only start when it was first used here.
-            text.AppendLine();
-            text.AppendLine("Riot IDs, as Riot records them:");
-            foreach (var alias in observed.Aliases) text.AppendLine("  " + alias);
+            text.Blank();
+            text.Plain("Riot IDs, as Riot records them:", "Ink");
+            foreach (var alias in observed.Aliases) text.Plain("  " + alias);
         }
         else
         {
@@ -217,45 +217,43 @@ public partial class AccountDetailWindow : Window
         RenderProvenance(text);
 
         if (observed?.MustResetPassword == true)
-            text.AppendLine("  NOTE: Riot is requiring a password reset on this account.");
+            text.Warn("  NOTE: Riot is requiring a password reset on this account.");
 
         if (observed?.EmailLooksConsistentWith(recovery.Email) == false)
         {
-            text.AppendLine();
-            text.AppendLine("WARNING: the email you saved does not match the one Riot has for this");
-            text.AppendLine("account (" + observed.MaskedEmail + "). One of them belongs to a different account.");
+            text.Blank();
+            text.Warn("WARNING: the email you saved does not match the one Riot has for this");
+            text.Warn("account (" + observed.MaskedEmail + "). One of them belongs to a different account.");
         }
 
-        text.AppendLine();
-        text.AppendLine("Typed only — nothing local can supply these:");
-        text.AppendLine("  Earliest purchase ref   " + (recovery.FirstPurchaseReference ?? "—"));
-        text.AppendLine("  How it was obtained     " + (recovery.HowObtained ?? "—"));
-        text.AppendLine("  2FA backup codes        " + recovery.MfaBackupCodes.Count + " stored");
+        text.Blank();
+        text.Plain("Typed only — nothing local can supply these:", "Ink");
+        text.Pair("  Earliest purchase ref", 26, recovery.FirstPurchaseReference, key: true);
+        text.Pair("  2FA backup codes", 26, recovery.MfaBackupCodes.Count + " stored");
 
-        RecoveryText.Text = text.ToString();
+        text.Done();
     }
 
     /// <summary>
     /// What happened to this account and when, from the dates attached to what it owns.
     ///
-    /// Only meaningful once "owned since" is set, so it says so rather than inventing a pivot.
     /// </summary>
-    private void RenderProvenance(StringBuilder text)
+    private void RenderProvenance(Readout text)
     {
         var identity = _account.Identity;
 
-        text.AppendLine();
-        text.AppendLine("Provenance:");
+        text.Blank();
+        text.Plain("Provenance:", "Ink");
 
         if (Provenance.FirstSkin(_account) is { } first)
         {
             var name = _services.Catalogue.Skin(first.SkinId)?.Name ?? ("skin " + first.SkinId);
-            text.AppendLine("  First skin acquired     " + name
+            text.Plain("  First skin acquired     " + name
                             + "   (" + first.AcquiredUtc.UtcDateTime.ToString("d MMM yyyy") + ")");
         }
         else
         {
-            text.AppendLine("  First skin acquired     - (sign in once to capture acquisition dates)");
+            text.Plain("  First skin acquired     - (sign in once to capture acquisition dates)");
         }
 
         var legacy = identity.OwnedSkinIds
@@ -264,20 +262,16 @@ public partial class AccountDetailWindow : Window
 
         if (legacy > 0)
         {
-            text.AppendLine("  No longer obtainable    " + legacy
+            text.Plain("  No longer obtainable    " + legacy
                             + " skins   (stronger age evidence than any claim)");
         }
 
-        if (Provenance.SplitByOwnership(_account, _services.Catalogue) is { } split)
-        {
-            text.AppendLine("  Owned since             " + split.OwnedSinceUtc.UtcDateTime.ToString("d MMM yyyy"));
-            text.AppendLine("  " + "Ownership split".PadRight(24) + split.Describe());
-        }
-
-        text.AppendLine();
-        text.AppendLine("Could the previous owner take it back?");
-        foreach (var check in Provenance.RecallExposure(_account))
-            text.AppendLine("  " + (check.Passed ? "[yes] " : "[ NO ] ") + check.Title);
+        text.Blank();
+        text.Plain("Can anyone else recover this account?", "Ink");
+        foreach (var check in Provenance.RecoveryExposure(_account))
+            // A failed check is the whole reason this section exists, so it reads as one.
+            if (check.Passed) text.Plain("  [yes] " + check.Title);
+            else text.Warn("  [ NO ] " + check.Title);
     }
 
     /// <summary>

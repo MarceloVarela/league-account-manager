@@ -2,8 +2,8 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Recovery sheet" Height="700" Width="720"
-        Background="{StaticResource Background}"
-        WindowStartupLocation="CenterOwner">
+        WindowStartupLocation="CenterOwner"
+        Style="{StaticResource ShellWindow}">
     <DockPanel Margin="18">
 
         <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,14,0,0">
@@ -18,8 +18,8 @@
             </StackPanel>
         </StackPanel>
 
-        <Border Background="{StaticResource Surface}" BorderBrush="{StaticResource BorderBrushSoft}"
-                BorderThickness="1" CornerRadius="6">
+        <Border Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Divider}"
+                BorderThickness="1">
             <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16">
                 <TextBox x:Name="SheetText" IsReadOnly="True" Background="Transparent" BorderThickness="0"
                          FontFamily="Consolas" FontSize="12.5" TextWrapping="NoWrap"

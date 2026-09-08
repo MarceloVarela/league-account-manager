@@ -149,6 +149,66 @@ public sealed class CollectionCaptureTests
     };
 
     [Fact]
+    public void A_capture_that_could_not_read_the_wallet_keeps_the_stored_balance()
+    {
+        // The wallet is read first and ungated, while the collection waits on a readiness gate. So a
+        // capture taken while the client is still loading can answer ranks and mastery but NOT
+        // /lol-inventory — and it used to write those nulls straight over a good balance, leaving the
+        // card showing "-" for RP and BE from then on with no way to tell why.
+        var account = new AccountEntry { Label = "main" };
+
+        var full = new ClientStats
+        {
+            CapturedUtc = DateTimeOffset.UtcNow,
+            RiotPoints = 2160,
+            BlueEssence = 282132,
+            ChampionsOwned = 173,
+            CollectionIsComplete = true,
+        };
+        full.ApplyTo(account);
+
+        var walletless = new ClientStats
+        {
+            CapturedUtc = DateTimeOffset.UtcNow,
+            RiotPoints = null,
+            BlueEssence = null,
+            ChampionsOwned = 173,
+            CollectionIsComplete = true,
+        };
+        walletless.ApplyTo(account);
+
+        Assert.Equal(2160, account.Identity.ClientStats?.RiotPoints);
+        Assert.Equal(282132, account.Identity.ClientStats?.BlueEssence);
+    }
+
+    [Fact]
+    public void A_real_wallet_reading_still_replaces_the_stored_one()
+    {
+        // The guard must not become a ratchet: spending RP has to be reflected, including down to
+        // zero, which is exactly the value a null-coalescing guard is most likely to swallow.
+        var account = new AccountEntry { Label = "main" };
+
+        new ClientStats
+        {
+            CapturedUtc = DateTimeOffset.UtcNow,
+            RiotPoints = 2160,
+            BlueEssence = 282132,
+            CollectionIsComplete = true,
+        }.ApplyTo(account);
+
+        new ClientStats
+        {
+            CapturedUtc = DateTimeOffset.UtcNow,
+            RiotPoints = 0,
+            BlueEssence = 15,
+            CollectionIsComplete = true,
+        }.ApplyTo(account);
+
+        Assert.Equal(0, account.Identity.ClientStats?.RiotPoints);
+        Assert.Equal(15, account.Identity.ClientStats?.BlueEssence);
+    }
+
+    [Fact]
     public void An_incomplete_capture_does_not_overwrite_a_good_collection()
     {
         var account = new AccountEntry { Label = "main" };

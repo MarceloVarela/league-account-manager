@@ -29,17 +29,6 @@ public sealed class RecoveryInfo
     /// <summary>When you believe the account was made. Riot asks for an approximate date.</summary>
     public DateOnly? ApproximateCreated { get; set; }
 
-    /// <summary>
-    /// When this account came into your hands, if it was not always yours.
-    ///
-    /// The pivot for provenance: everything acquired before this date was the previous owner s doing,
-    /// and everything after is yours. On a bought account that split is the difference between a
-    /// collection you can speak to and one you cannot.
-    /// </summary>
-    public DateOnly? OwnedSince { get; set; }
-
-    /// <summary>Made it yourself, bought it, was given it — context that ages badly in memory.</summary>
-    public string? HowObtained { get; set; }
 
     /// <summary>A classic Riot Support ownership question.</summary>
     public string? FirstChampionPurchased { get; set; }
@@ -73,11 +62,10 @@ public sealed class RecoveryInfo
     public double Completeness()
     {
         var filled = 0;
-        var total = 6;
+        var total = 5;
         if (!string.IsNullOrWhiteSpace(Email)) filled++;
         if (!string.IsNullOrWhiteSpace(PhoneNumber)) filled++;
         if (ApproximateCreated is not null) filled++;
-        if (!string.IsNullOrWhiteSpace(HowObtained)) filled++;
         if (!string.IsNullOrWhiteSpace(FirstChampionPurchased)) filled++;
         if (!string.IsNullOrWhiteSpace(FirstPurchaseReference)) filled++;
         return (double)filled / total;

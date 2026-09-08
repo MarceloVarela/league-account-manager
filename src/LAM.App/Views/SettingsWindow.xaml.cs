@@ -216,12 +216,16 @@ public partial class SettingsWindow : Window
             var result = await client.TestKeyAsync(region, CancellationToken.None);
 
             KeyTestResult.Text = result.Message;
-            KeyTestResult.Foreground = (System.Windows.Media.Brush)FindResource(result.Ok ? "Success" : "Danger");
+            // SetResourceReference, not FindResource: the latter snapshots the brush against
+            // whichever palette is live and never follows a theme swap.
+            KeyTestResult.SetResourceReference(
+                System.Windows.Controls.TextBlock.ForegroundProperty, result.Ok ? "Ok" : "WarnFg");
         }
         catch (Exception ex)
         {
             KeyTestResult.Text = "Could not check the key: " + ex.Message;
-            KeyTestResult.Foreground = (System.Windows.Media.Brush)FindResource("Danger");
+            KeyTestResult.SetResourceReference(
+                System.Windows.Controls.TextBlock.ForegroundProperty, "WarnFg");
         }
         finally
         {
@@ -243,23 +247,29 @@ public partial class SettingsWindow : Window
         var result = _services.GameSettings.Save();
         UpdateSettingsProfileStatus();
 
-        MessageBox.Show(result.Message, "League settings", MessageBoxButton.OK,
-            result.Success ? MessageBoxImage.Information : MessageBoxImage.Warning);
+        Dialog.Say(
+            this,
+            "League settings",
+            result.Message);
     }
 
     private void OnRevertGameSettings(object sender, RoutedEventArgs e)
     {
-        var answer = MessageBox.Show(
+        var answer = Dialog.Confirm(
+            this,
+            "Revert settings",
             "Put League's settings back exactly as they were before this app first changed them?"
             + Environment.NewLine + Environment.NewLine
             + "Close League first — it holds these files open and rewrites them on exit.",
-            "Revert settings", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+            "Revert settings");
 
-        if (answer != MessageBoxResult.Yes) return;
+        if (!answer) return;
 
         var result = _services.GameSettings.RevertToPristine();
-        MessageBox.Show(result.Message, "League settings", MessageBoxButton.OK,
-            result.Success ? MessageBoxImage.Information : MessageBoxImage.Warning);
+        Dialog.Say(
+            this,
+            "League settings",
+            result.Message);
     }
 
     private void OnRefreshDiagnostics(object sender, RoutedEventArgs e) => UpdateDiagnostics();
@@ -270,9 +280,11 @@ public partial class SettingsWindow : Window
     {
         if (!await HelloUnlock.IsAvailableAsync())
         {
-            MessageBox.Show(
+            Dialog.Say(
+                this,
+                "Windows Hello",
                 "Windows Hello is not set up on this PC. Add a PIN, fingerprint or face in Windows " +
-                "Settings first.", "Windows Hello", MessageBoxButton.OK, MessageBoxImage.Information);
+                "Settings first.");
             return;
         }
 
@@ -285,7 +297,10 @@ public partial class SettingsWindow : Window
         }
         catch (HelloUnlockException ex)
         {
-            MessageBox.Show(ex.Message, "Windows Hello", MessageBoxButton.OK, MessageBoxImage.Warning);
+            Dialog.Say(
+                this,
+                "Windows Hello",
+                ex.Message);
         }
     }
 
@@ -315,17 +330,20 @@ public partial class SettingsWindow : Window
         // the next unlock — silently, and at the worst moment.
         if (_services.Hello.IsEnrolled)
         {
-            MessageBox.Show(
+            Dialog.Say(
+                this,
+                "Master password",
                 "Master password changed.\n\nWindows Hello has to be re-enabled, because the copy it " +
-                "held was tied to your old password. Doing that now.",
-                "Master password", MessageBoxButton.OK, MessageBoxImage.Information);
+                "held was tied to your old password. Doing that now.");
 
             _ = ReEnrollHelloAsync();
         }
         else
         {
-            MessageBox.Show("Master password changed.", "Master password",
-                MessageBoxButton.OK, MessageBoxImage.Information);
+            Dialog.Say(
+                this,
+                "Master password",
+                "Master password changed.");
         }
     }
 
@@ -341,8 +359,10 @@ public partial class SettingsWindow : Window
         {
             _vault.Settings.WindowsHelloEnabled = false;
             _vault.Save();
-            MessageBox.Show(ex.Message + "\n\nHello has been turned off; your master password still works.",
-                "Windows Hello", MessageBoxButton.OK, MessageBoxImage.Warning);
+            Dialog.Say(
+                this,
+                "Windows Hello",
+                ex.Message + "\n\nHello has been turned off; your master password still works.");
         }
         finally
         {
@@ -376,14 +396,18 @@ public partial class SettingsWindow : Window
         try
         {
             _vault.ExportTo(dialog.FileName, passphrase);
-            MessageBox.Show(
+            Dialog.Say(
+                this,
+                "Export",
                 "Exported " + _vault.Document.Accounts.Count + " accounts.\n\n" +
-                "Keep this somewhere safe — anyone with the file and the passphrase has every account in it.",
-                "Export", MessageBoxButton.OK, MessageBoxImage.Information);
+                "Keep this somewhere safe — anyone with the file and the passphrase has every account in it.");
         }
         catch (Exception ex)
         {
-            MessageBox.Show(ex.Message, "Export failed", MessageBoxButton.OK, MessageBoxImage.Warning);
+            Dialog.Say(
+                this,
+                "Export failed",
+                ex.Message);
         }
     }
 
@@ -413,7 +437,10 @@ public partial class SettingsWindow : Window
         }
         catch (Exception ex)
         {
-            MessageBox.Show(ex.Message, "Import failed", MessageBoxButton.OK, MessageBoxImage.Warning);
+            Dialog.Say(
+                this,
+                "Import failed",
+                ex.Message);
             return;
         }
 
@@ -429,13 +456,15 @@ public partial class SettingsWindow : Window
             else added++;
         }
 
-        var answer = MessageBox.Show(
+        var answer = Dialog.Confirm(
+            this,
+            "Import",
             "This export holds " + imported.Accounts.Count + " accounts.\n\n" +
             added + " would be added, " + updated + " would replace an account you already have.\n\n" +
             "Continue?",
-            "Import", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            "Import accounts");
 
-        if (answer != MessageBoxResult.Yes) return;
+        if (!answer) return;
 
         foreach (var account in imported.Accounts)
         {
@@ -446,8 +475,10 @@ public partial class SettingsWindow : Window
         _vault.Save();
         UpdateBackupStatus();
 
-        MessageBox.Show("Imported " + imported.Accounts.Count + " accounts.", "Import",
-            MessageBoxButton.OK, MessageBoxImage.Information);
+        Dialog.Say(
+            this,
+            "Import",
+            "Imported " + imported.Accounts.Count + " accounts.");
     }
 
     private void OnOpenFolder(object sender, RoutedEventArgs e)
@@ -458,7 +489,10 @@ public partial class SettingsWindow : Window
         }
         catch (Exception ex)
         {
-            MessageBox.Show(ex.Message, "Could not open the folder", MessageBoxButton.OK, MessageBoxImage.Warning);
+            Dialog.Say(
+                this,
+                "Could not open the folder",
+                ex.Message);
         }
     }
 

@@ -34,15 +34,19 @@ public partial class RecoverySheetWindow : Window
             Clipboard.SetText(SheetText.Text);
             if (IncludeSecretsBox.IsChecked == true)
             {
-                MessageBox.Show(
+                Dialog.Say(
+                    this,
+                    "Copied",
                     "Copied — including passwords. Anything on the clipboard can be read by other " +
-                    "programs, so paste it where you need it and then copy something else.",
-                    "Copied", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    "programs, so paste it where you need it and then copy something else.");
             }
         }
         catch (Exception ex)
         {
-            MessageBox.Show(ex.Message, "Could not copy", MessageBoxButton.OK, MessageBoxImage.Warning);
+            Dialog.Say(
+                this,
+                "Could not copy",
+                ex.Message);
         }
     }
 
@@ -65,15 +69,19 @@ public partial class RecoverySheetWindow : Window
 
             if (IncludeSecretsBox.IsChecked == true)
             {
-                MessageBox.Show(
+                Dialog.Say(
+                    this,
+                    "Saved",
                     "Saved — including passwords, in plain text. This file has none of the vault's " +
-                    "protection, so store it somewhere encrypted or delete it once you are done.",
-                    "Saved", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    "protection, so store it somewhere encrypted or delete it once you are done.");
             }
         }
         catch (Exception ex)
         {
-            MessageBox.Show(ex.Message, "Could not save", MessageBoxButton.OK, MessageBoxImage.Warning);
+            Dialog.Say(
+                this,
+                "Could not save",
+                ex.Message);
         }
     }
 

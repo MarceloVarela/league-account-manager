@@ -1,0 +1,144 @@
+<Window x:Class="LAM.App.Views.QuickSwapFlyout"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:LAM.App.ViewModels"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        ResizeMode="NoResize" ShowInTaskbar="False" Topmost="True"
+        Width="340" SizeToContent="Height"
+        Foreground="{DynamicResource Ink}"
+        FontFamily="{StaticResource BodyFont}"
+        Deactivated="OnDeactivated" KeyDown="OnKey">
+
+    <!--
+        Quick swap. Raised by the tray icon or by alt + \, from anywhere.
+
+        Deliberately not a smaller copy of the accounts grid: one row per account, the rank in its
+        tier colour on the right, and a click signs in. The whole point is swapping without going to
+        find the window, so it closes the moment it loses focus.
+    -->
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Theme.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <vm:TierBrushConverter x:Key="TierBrush" />
+            <BooleanToVisibilityConverter x:Key="BoolToVis" />
+        </ResourceDictionary>
+    </Window.Resources>
+
+    <Border Background="{DynamicResource Ground}" BorderBrush="{DynamicResource ShellBorder}"
+            BorderThickness="1" Effect="{DynamicResource Elevated}">
+        <DockPanel>
+
+            <!-- header -->
+            <Border DockPanel.Dock="Top" Background="{DynamicResource Surface}"
+                    BorderBrush="{DynamicResource Divider}" BorderThickness="0,0,0,1"
+                    Padding="12,11" MouseLeftButtonDown="OnDrag">
+                <Grid>
+                    <StackPanel Orientation="Horizontal">
+                        <Image Source="pack://application:,,,/Assets/hextech-small.png"
+                               Width="16" Height="16" VerticalAlignment="Center"
+                               RenderOptions.BitmapScalingMode="HighQuality" />
+                        <TextBlock Text="QUICK SWAP" Style="{StaticResource ChromeLabelBase}"
+                                   Margin="9,0,0,0" VerticalAlignment="Center" />
+                    </StackPanel>
+
+                    <TextBlock Text="ALT + \" Style="{StaticResource Mono}"
+                               HorizontalAlignment="Right" VerticalAlignment="Center" />
+                </Grid>
+            </Border>
+
+            <!-- footer -->
+            <Border DockPanel.Dock="Bottom" BorderBrush="{DynamicResource Divider}"
+                    BorderThickness="0,1,0,0" Padding="12,11">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="9" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <Button Grid.Column="0" Content="OPEN MANAGER" Click="OnOpenManager" MinHeight="32" />
+                    <Button Grid.Column="2" Content="LOCK VAULT" Click="OnLockVault" MinHeight="32" />
+                </Grid>
+            </Border>
+
+            <!-- filter -->
+            <Grid DockPanel.Dock="Top" Margin="12,11,12,0">
+                <TextBox x:Name="FilterBox" Padding="26,0,9,0" MinHeight="32"
+                         TextChanged="OnFilterChanged" />
+                <Ellipse Width="11" Height="11" HorizontalAlignment="Left" Margin="9,0,0,0"
+                         VerticalAlignment="Center" IsHitTestVisible="False"
+                         Stroke="{DynamicResource MutedText}" StrokeThickness="1" />
+                <TextBlock x:Name="FilterHint" Text="type to filter…" Style="{StaticResource Mono}"
+                           Margin="27,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False" />
+            </Grid>
+
+            <!-- rows -->
+            <Grid Margin="12,11,12,11">
+                <ItemsControl x:Name="Rows" MaxHeight="300">
+                    <ItemsControl.Template>
+                        <ControlTemplate TargetType="ItemsControl">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <ItemsPresenter />
+                            </ScrollViewer>
+                        </ControlTemplate>
+                    </ItemsControl.Template>
+
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type vm:AccountTile}">
+                            <Border x:Name="Row" Background="Transparent" Padding="8,7" Cursor="Hand"
+                                    MouseLeftButtonUp="OnRowClicked"
+                                    Focusable="True" KeyboardNavigation.IsTabStop="True"
+                                    KeyDown="OnRowKey"
+                                    FocusVisualStyle="{StaticResource AccentFocusVisual}"
+                                    AutomationProperties.Name="{Binding Title}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <Border Grid.Column="0" Width="30" Height="30" Margin="0,0,10,0"
+                                            Background="{DynamicResource InactiveFill}"
+                                            BorderBrush="{DynamicResource ShellBorder}" BorderThickness="1">
+                                        <TextBlock Text="{Binding Initials}" Style="{StaticResource Mono}"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    </Border>
+
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding Title}" FontSize="13.5"
+                                                   FontFamily="{StaticResource BodyFont}"
+                                                   Foreground="{DynamicResource Name}"
+                                                   TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Text="{Binding IdentityMeta}" Style="{StaticResource Mono}"
+                                                   Margin="0,3,0,0" TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
+
+                                    <TextBlock Grid.Column="2" Text="{Binding RankName}"
+                                               FontFamily="{StaticResource HeadingFont}"
+                                               FontWeight="SemiBold" FontSize="12.5"
+                                               VerticalAlignment="Center" Margin="9,0,0,0"
+                                               Foreground="{Binding TierKey, Converter={StaticResource TierBrush}}" />
+                                </Grid>
+                            </Border>
+
+                            <DataTemplate.Triggers>
+                                <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource Self}}"
+                                             Value="True">
+                                    <Setter TargetName="Row" Property="Background"
+                                            Value="{DynamicResource RowHover}" />
+                                </DataTrigger>
+                            </DataTemplate.Triggers>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <TextBlock x:Name="EmptyNote" Style="{StaticResource Mono}" Margin="8,12"
+                           TextWrapping="Wrap" Visibility="Collapsed" />
+            </Grid>
+        </DockPanel>
+    </Border>
+</Window>

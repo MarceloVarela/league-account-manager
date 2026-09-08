@@ -34,8 +34,17 @@ public sealed class ClientStatsProbe
         var stats = new ClientStats { CapturedUtc = DateTimeOffset.UtcNow };
 
         stats = await AddRanksAsync(client, stats, cancellationToken);
+
+        // The wallet is served by the SAME lol-inventory plugin the collection waits on, so it loses
+        // the identical race: read at step two it answers nothing while ranks and mastery already
+        // reply, and the account then shows "—" for RP and BE beside a complete collection. Wait for
+        // the gate first, then read it — but attempt it even when the gate timed out, because a
+        // readiness endpoint that merely 404s on some patch must not permanently suppress a wallet
+        // read that would have worked.
+        var inventoryReady = await WaitForInventoryAsync(client, cancellationToken);
+
         stats = await AddWalletAsync(client, stats, cancellationToken);
-        stats = await AddCollectionAsync(client, stats, cancellationToken);
+        stats = await AddCollectionAsync(client, stats, inventoryReady, cancellationToken);
         stats = await AddHonorAsync(client, stats, cancellationToken);
         stats = await AddMasteryAsync(client, stats, cancellationToken);
         stats = await AddSeasonRewardsAsync(client, stats, cancellationToken);
@@ -225,10 +234,11 @@ public sealed class ClientStatsProbe
     /// stability alone can be fooled by the rotation sitting at twenty for longer than one poll.
     /// </summary>
     private static async Task<ClientStats> AddCollectionAsync(
-        RiotLocalApiClient client, ClientStats stats, CancellationToken cancellationToken)
+        RiotLocalApiClient client, ClientStats stats, bool inventoryReady,
+        CancellationToken cancellationToken)
     {
-        if (!await WaitForInventoryAsync(client, cancellationToken))
-            return stats with { CollectionIsComplete = false };
+        // The gate is now awaited by the caller, so the wallet can share it.
+        if (!inventoryReady) return stats with { CollectionIsComplete = false };
 
         var championIds = await ReadWhenStableAsync(
             client, ChampionsPath, ReadChampionIds, cancellationToken);
@@ -574,20 +584,32 @@ public sealed record ClientStats
                 identity.SkinAcquiredEpochSeconds = SkinAcquiredEpochSeconds;
         }
 
+        // The wallet is preserved across BOTH branches. It is read after the readiness gate now, so
+        // it should rarely be missing — but a single un-retried GET can still fail for unrelated
+        // reasons, and without this a capture that missed it wrote null over a good balance and the
+        // card showed "—" from then on.
+        var previous = identity.ClientStats;
+
+        var kept = this with
+        {
+            RiotPoints = RiotPoints ?? previous?.RiotPoints,
+            BlueEssence = BlueEssence ?? previous?.BlueEssence,
+        };
+
         identity.ClientStats = CollectionIsComplete
-            ? this
-            : this with
+            ? kept
+            : kept with
             {
                 // Keep the fresh rank and wallet, but do not let a partial collection be displayed.
-                ChampionsOwned = identity.ClientStats?.ChampionsOwned,
-                SkinsOwned = identity.ClientStats?.SkinsOwned,
+                ChampionsOwned = previous?.ChampionsOwned,
+                SkinsOwned = previous?.SkinsOwned,
                 OwnedChampionIds = [],
                 OwnedSkinIds = [],
 
                 // The first purchase comes from the same half-loaded list, so a partial read could
                 // name whichever rotation champion happened to be oldest. Keep what was proven.
-                FirstChampionId = identity.ClientStats?.FirstChampionId,
-                FirstChampionPurchasedUtc = identity.ClientStats?.FirstChampionPurchasedUtc,
+                FirstChampionId = previous?.FirstChampionId,
+                FirstChampionPurchasedUtc = previous?.FirstChampionPurchasedUtc,
             };
     }
 }

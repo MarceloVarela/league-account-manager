@@ -47,6 +47,8 @@ public sealed class PostLoginCapture
     /// <summary>Supplies the probe that reads the loot inventory from the client.</summary>
     public void UseLootProbe(ClientLootProbe probe) => _lootProbe = probe;
 
+    public void UseMatchProbe(ClientMatchProbe probe) => _matchProbe = probe;
+
     /// <summary>Supplies the component that carries League settings across accounts.</summary>
     public void UseGameSettings(GameSettingsProfile settings) => _settings = settings;
 
@@ -65,6 +67,7 @@ public sealed class PostLoginCapture
         await ReadAccountFactsAsync(context, cancellationToken);
         await ReadClientStatsAsync(context, cancellationToken);
         await ReadLootAsync(context, cancellationToken);
+        await ReadMatchesAsync(context, cancellationToken);
         RestoreGameSettings(context);
     }
 
@@ -222,6 +225,42 @@ public sealed class PostLoginCapture
     /// <summary>
     /// Reads the loot inventory. Enrichment like the rest, so a failure never fails the sign-in.
     /// </summary>
+    private ClientMatchProbe? _matchProbe;
+
+    /// <summary>
+    /// Reads recent ranked results.
+    ///
+    /// Last in the pass on purpose: match history is served late by the client, and unlike the
+    /// collection it is a nice-to-have, so it must never delay anything that matters.
+    /// </summary>
+    private async Task ReadMatchesAsync(LoginContext context, CancellationToken cancellationToken)
+    {
+        if (_matchProbe is null) return;
+
+        try
+        {
+            var matches = await _matchProbe.TryReadAsync(cancellationToken);
+            if (matches is null)
+            {
+                _trace.Write("no match history available from the client");
+                return;
+            }
+
+            context.MatchesObserved?.Invoke(matches);
+            _trace.Write("matches: " + matches.Recent.Count + " ranked results, "
+                         + matches.Wins + "W " + matches.Losses + "L");
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            // Never fatal: a missing form chart must not fail a sign-in that otherwise worked.
+            _trace.Write("match history unavailable (" + ex.GetType().Name + ")");
+        }
+    }
+
     private async Task ReadLootAsync(LoginContext context, CancellationToken cancellationToken)
     {
         if (_lootProbe is null) return;

@@ -19,6 +19,24 @@ public sealed class LoginOrchestrator
     private readonly TimeProvider _clock;
     private readonly LoginTrace _trace;
 
+    /// <summary>
+    /// Supplies stealth when it is switched on. Null in tests and whenever the feature is not
+    /// configured, which is the same thing as far as every caller is concerned.
+    /// </summary>
+    private Func<AppSettings, CancellationToken, Task<Stealth.StealthSession?>>? _stealth;
+
+    public void UseStealth(Func<AppSettings, CancellationToken, Task<Stealth.StealthSession?>> start)
+        => _stealth = start;
+
+    /// <summary>
+    /// Raised when a sign-in brings stealth up, so the shell can dispose it at exit.
+    ///
+    /// The session deliberately outlives the sign-in: the client holds its chat connection open for
+    /// the whole time it is running, and tearing the proxy down when the login task finished would
+    /// kill chat a few seconds after the user got in.
+    /// </summary>
+    public event Action<Stealth.StealthSession>? StealthStarted;
+
     public LoginOrchestrator(
         IReadOnlyList<ILoginStrategy> strategies,
         RiotProcessManager processes,
@@ -86,6 +104,38 @@ public sealed class LoginOrchestrator
             AccountFactsObserved = facts => facts.ApplyTo(account, _clock.GetUtcNow()),
             ClientStatsObserved = stats => stats.ApplyTo(account),
             LootObserved = loot => account.Identity.Loot = loot,
+            BeginStealth = async token =>
+            {
+                if (_stealth is null || !settings.StealthLogin) return string.Empty;
+
+                var session = await _stealth(settings, token);
+
+                if (session is null)
+                {
+                    // Every reason stealth can be unavailable has already been traced with its
+                    // specifics. Say so once here so the outcome is visible without the log.
+                    progress.Report(new LoginProgress(
+                        LoginStage.LaunchingClient, "Signing in without stealth."));
+
+                    return string.Empty;
+                }
+
+                StealthStarted?.Invoke(session);
+                return session.LaunchArgument;
+            },
+
+            MatchesObserved = matches =>
+            {
+                account.Identity.Matches = matches;
+
+                // A real game beats the app's own idea of "recently used": LastActivityUtc is what
+                // the dormancy warnings read, and until now it only knew when the app touched it.
+                if (matches.LastPlayedUtc is { } played
+                    && (account.Identity.LastActivityUtc is null || played > account.Identity.LastActivityUtc))
+                {
+                    account.Identity.LastActivityUtc = played;
+                }
+            },
         };
 
         var attempted = new List<string>();

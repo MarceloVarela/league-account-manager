@@ -80,7 +80,6 @@ public static class RecoverySheet
         Line("Email provider", recovery.EmailProvider);
         Line("Still control that email", recovery.EmailStillControlled ? "yes" : "NO — flagged");
         Line("Phone on account", recovery.PhoneNumber);
-        Line("How it was obtained", recovery.HowObtained);
         Line("First champion bought", recovery.FirstChampionPurchased);
         Line("Earliest purchase ref", recovery.FirstPurchaseReference);
 

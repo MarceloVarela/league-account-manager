@@ -20,7 +20,8 @@ public sealed class RiotLauncher
     /// Launches the client into League. These are the launcher's own documented arguments — the
     /// same ones the desktop shortcut uses — so nothing here depends on undocumented behaviour.
     /// </summary>
-    public Process Launch(string product = "league_of_legends", string patchline = "live")
+    public Process Launch(string product = "league_of_legends", string patchline = "live",
+        string? extraArguments = null)
     {
         if (!_paths.ClientExists)
             throw new RiotClientNotFoundException(
@@ -42,8 +43,11 @@ public sealed class RiotLauncher
 
             // ArgumentList is not honoured under ShellExecute, so the command line is built here.
             // Both values are fixed identifiers with no spaces or quotes, so plain concatenation is
-            // safe — nothing user-supplied reaches this string.
-            Arguments = "--launch-product=" + product + " --launch-patchline=" + patchline,
+            // safe — nothing user-supplied reaches this string. The same holds for extraArguments,
+            // which is built by StealthSession from a port number this process just bound; it must
+            // never be widened to carry a path or anything a user typed without quoting it.
+            Arguments = "--launch-product=" + product + " --launch-patchline=" + patchline
+                        + (string.IsNullOrEmpty(extraArguments) ? "" : " " + extraArguments),
         };
 
         try

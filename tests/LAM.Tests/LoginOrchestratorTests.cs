@@ -318,7 +318,6 @@ public sealed class AccountEntryTests
             Email = "a@b.com",
             PhoneNumber = "123",
             ApproximateCreated = new DateOnly(2015, 3, 1),
-            HowObtained = "made it",
             FirstChampionPurchased = "Ashe",
             FirstPurchaseReference = "order-1",
         };

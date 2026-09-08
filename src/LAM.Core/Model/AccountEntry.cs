@@ -58,6 +58,19 @@ public sealed class AccountEntry
     public bool IsFavourite { get; set; }
 
     /// <summary>
+    /// Warnings the user has chosen to stop seeing on this account's card.
+    ///
+    /// Stored as STABLE IDS, never as the warning text: three of the warnings interpolate a mask or
+    /// an account state, so keying on the sentence would silently un-dismiss one the moment Riot
+    /// reported something slightly different.
+    ///
+    /// Dismissing hides the card badge only. The warning is still listed in the account's detail
+    /// window and still counts towards vault health, because this is a "stop nagging me" switch and
+    /// not a way to make a real problem disappear.
+    /// </summary>
+    public List<string> DismissedWarnings { get; set; } = [];
+
+    /// <summary>
     /// Replaces the password, keeping the old one in history.
     ///
     /// A no-op when the password has not actually changed, so merely opening and saving the editor
@@ -145,6 +158,7 @@ public sealed class AccountEntry
     public bool MatchesSearch(string query)
     {
         if (string.IsNullOrWhiteSpace(query)) return true;
+
         var q = query.Trim();
 
         static bool Has(string? haystack, string needle)
@@ -157,6 +171,10 @@ public sealed class AccountEntry
             || Has(Identity.GameName, q)
             || Has(DisplayRiotId, q)
             || Has(Recovery.Email, q)
+
+            // Rank, which the search box's tooltip has always promised and the design's own spec
+            // lists ("matches name, tagline, region, tags, rank") but which was never searched.
+            || Has(Identity.SoloRank?.ToString(), q)
             || Tags.Any(t => Has(t, q));
     }
 }

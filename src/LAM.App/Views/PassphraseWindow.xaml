@@ -2,8 +2,9 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Height="Auto" Width="470" SizeToContent="Height"
-        Background="{StaticResource Background}"
-        WindowStartupLocation="CenterOwner" ResizeMode="NoResize">
+        WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
+        Style="{StaticResource ShellWindow}"
+        Title="Passphrase">
     <StackPanel Margin="22">
         <TextBlock x:Name="Explanation" Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,0,0,16" />
 
@@ -15,7 +16,7 @@
             <PasswordBox x:Name="SecondBox" KeyDown="OnKeyDown" />
         </StackPanel>
 
-        <TextBlock x:Name="ErrorText" Foreground="{StaticResource Danger}" TextWrapping="Wrap"
+        <TextBlock x:Name="ErrorText" Foreground="{DynamicResource WarnFg}" TextWrapping="Wrap"
                    Margin="0,12,0,0" Visibility="Collapsed" />
 
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">

@@ -1,17 +1,14 @@
-<Window x:Class="LAM.App.Views.FleetWindow"
+<UserControl x:Class="LAM.App.Views.FleetPane"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Fleet" Height="760" Width="1000" MinHeight="520" MinWidth="760"
-        Background="{StaticResource Background}"
-        WindowStartupLocation="CenterOwner">
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-    <Window.Resources>
+    <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
-    </Window.Resources>
+    </UserControl.Resources>
 
     <DockPanel>
-        <Border DockPanel.Dock="Top" Background="{StaticResource Surface}"
-                BorderBrush="{StaticResource BorderBrushSoft}" BorderThickness="0,0,0,1" Padding="18,14">
+        <Border DockPanel.Dock="Top" Background="{DynamicResource Surface}"
+                BorderBrush="{DynamicResource Divider}" BorderThickness="0,0,0,1" Padding="18,14">
             <StackPanel>
                 <TextBlock Text="Fleet" Style="{StaticResource Heading}" />
                 <TextBlock x:Name="HeadlineText" Style="{StaticResource Muted}" Margin="0,3,0,0"
@@ -19,12 +16,12 @@
             </StackPanel>
         </Border>
 
-        <Border DockPanel.Dock="Bottom" Background="{StaticResource Surface}"
-                BorderBrush="{StaticResource BorderBrushSoft}" BorderThickness="0,1,0,0" Padding="18,7">
+        <Border DockPanel.Dock="Bottom" Background="{DynamicResource Surface}"
+                BorderBrush="{DynamicResource Divider}" BorderThickness="0,1,0,0" Padding="18,7">
             <TextBlock x:Name="StatusText" Style="{StaticResource Muted}" TextTrimming="CharacterEllipsis" />
         </Border>
 
-        <TabControl Margin="14" Background="Transparent" BorderBrush="{StaticResource BorderBrushSoft}">
+        <TabControl Margin="14" Background="Transparent" BorderBrush="{DynamicResource Divider}">
 
             <!-- ============ FIND A SKIN ============ -->
             <TabItem Header="Find a skin">
@@ -58,21 +55,21 @@
 
                         <ListBox.ItemTemplate>
                             <DataTemplate>
-                                <Border Margin="0,0,0,8" Padding="12" CornerRadius="6"
-                                        Background="{StaticResource Surface}"
-                                        BorderBrush="{StaticResource BorderBrushSoft}" BorderThickness="1">
+                                <Border Margin="0,0,0,8" Padding="12"
+                                        Background="{DynamicResource Surface}"
+                                        BorderBrush="{DynamicResource Divider}" BorderThickness="1">
                                     <StackPanel>
                                         <DockPanel>
                                             <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13" />
                                             <TextBlock Text="{Binding ChampionAndPrice}" Style="{StaticResource Muted}"
                                                        FontSize="11" Margin="10,2,0,0" />
-                                            <TextBlock Text="LEGACY" FontSize="10" FontWeight="SemiBold"
-                                                       Foreground="{StaticResource Warning}" Margin="10,2,0,0"
+                                            <TextBlock Text="LEGACY" FontSize="11" FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource WarnFg}" Margin="10,2,0,0"
                                                        Visibility="{Binding IsLegacy, Converter={StaticResource BoolToVis}}" />
                                         </DockPanel>
 
                                         <TextBlock Text="{Binding OwnersText}" Margin="0,7,0,0" FontSize="12"
-                                                   TextWrapping="Wrap" Foreground="{StaticResource Success}" />
+                                                   TextWrapping="Wrap" Foreground="{DynamicResource Ok}" />
                                         <TextBlock Text="{Binding WithoutText}" Margin="0,3,0,0" FontSize="12"
                                                    TextWrapping="Wrap" Style="{StaticResource Muted}" />
                                     </StackPanel>
@@ -89,7 +86,7 @@
                     <StackPanel Margin="18">
                         <TextBlock x:Name="PortfolioText" FontFamily="Consolas" FontSize="12.5"
                                    LineHeight="20" TextWrapping="Wrap" />
-                        <Border Background="#224C8DFF" CornerRadius="6" Padding="12" Margin="0,14,0,0">
+                        <Border Background="{DynamicResource AccentTint100}" Padding="12" Margin="0,14,0,0">
                             <TextBlock TextWrapping="Wrap" Style="{StaticResource Muted}"
                                        Text="RP figures are what these skins are priced at today, totalled up. That is not what was paid, and it is emphatically not what an account is worth — accounts are not transferable, and this tool takes no view on that." />
                         </Border>
@@ -148,4 +145,4 @@
             </TabItem>
         </TabControl>
     </DockPanel>
-</Window>
+</UserControl>

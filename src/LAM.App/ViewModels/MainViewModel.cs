@@ -47,6 +47,21 @@ public sealed class MainViewModel : INotifyPropertyChanged
 
     public ObservableCollection<AccountTile> VisibleAccounts { get; } = [];
 
+    /// <summary>
+    /// What the accounts grid renders: every visible card, then the add tile.
+    ///
+    /// One collection rather than a card list plus a trailing control, so the tile flows as the next
+    /// cell of the same grid. That is what keeps a single account from sitting alone in an empty row
+    /// — a failure mode the design calls out by name.
+    /// </summary>
+    public ObservableCollection<object> GridItems { get; } = [];
+
+    /// <summary>
+    /// One tile per account, kept across filters so icons are decoded once. Reference-keyed: the
+    /// account object is the identity, and it survives edits to every field on it.
+    /// </summary>
+    private readonly Dictionary<AccountEntry, AccountTile> _tiles = new(ReferenceEqualityComparer.Instance);
+
     public IReadOnlyList<AccountSort> SortOptions { get; } = Enum.GetValues<AccountSort>();
 
     public AccountSort Sort
@@ -54,6 +69,51 @@ public sealed class MainViewModel : INotifyPropertyChanged
         get => _sort;
         set { if (_sort == value) return; _sort = value; OnPropertyChanged(); ApplyFilter(); }
     }
+
+    /// <summary>
+    /// The sort key as the toolbar button shows it.
+    ///
+    /// Only the three the design names are in the cycle; Level and Region stay reachable in the enum
+    /// but are not part of the button's rotation.
+    /// </summary>
+    public string SortLabel => _sort switch
+    {
+        AccountSort.Rank => "RANK",
+        AccountSort.Name => "NAME",
+        AccountSort.Level => "LEVEL",
+        AccountSort.Region => "REGION",
+        _ => "LAST USED",
+    };
+
+    /// <summary>Advances the sort: last used -> rank -> name -> last used.</summary>
+    public void CycleSort()
+    {
+        Sort = _sort switch
+        {
+            AccountSort.LastUsed => AccountSort.Rank,
+            AccountSort.Rank => AccountSort.Name,
+            _ => AccountSort.LastUsed,
+        };
+
+        OnPropertyChanged(nameof(SortLabel));
+    }
+
+    /// <summary>
+    /// Which game the grid is showing.
+    ///
+    /// The app reads League only, so VALORANT selects a filter that matches nothing today rather
+    /// than pretending otherwise — the segment is drawn because the design draws it, and it tells
+    /// the truth when pressed.
+    /// </summary>
+    public string GameFilter
+    {
+        get => _gameFilter;
+        set { if (_gameFilter == value) return; _gameFilter = value; OnPropertyChanged(); ApplyFilter(); }
+    }
+
+    public const string AllGames = "ALL";
+
+    private string _gameFilter = AllGames;
 
     public string RegionFilter
     {
@@ -105,9 +165,13 @@ public sealed class MainViewModel : INotifyPropertyChanged
             if (_searchText == value) return;
             _searchText = value;
             OnPropertyChanged();
+            OnPropertyChanged(nameof(SearchIsEmpty));
             ApplyFilter();
         }
     }
+
+    /// <summary>Drives the search placeholder — WPF has no native one.</summary>
+    public bool SearchIsEmpty => string.IsNullOrEmpty(_searchText);
 
     public string Status
     {
@@ -148,16 +212,32 @@ public sealed class MainViewModel : INotifyPropertyChanged
         private set { _busyIsTyping = value; OnPropertyChanged(); }
     }
 
+    // The counts beside each nav tab. Bound as Tag on the NavTab template; without these three the
+    // mono count run renders empty on every tab, which is what shipped.
+    public int AccountCount => _vault?.Document.Live.Count() ?? 0;
+
+    /// <summary>Accounts the fleet view can actually say anything about.</summary>
+    public int FleetCount => _vault?.Document.Live.Count(HasCollection) ?? 0;
+
+    /// <summary>Distinct loot rows across every account — what the Loot tab will list.</summary>
+    public int LootCount => _vault?.Document.Live
+        .Where(a => a.Identity.Loot is { IsEmpty: false })
+        .Sum(a => a.Identity.Loot!.Items.Count) ?? 0;
+
+    private static bool HasCollection(AccountEntry account)
+        => account.Identity.OwnedSkinIds.Length > 0 || account.Identity.OwnedChampionIds.Length > 0;
+
+    /// <summary>The design's phrasing: "9 OF 9 SHOWN", or the empty case.</summary>
     public string AccountCountText
     {
         get
         {
             if (_vault is null || _vault.IsLocked) return string.Empty;
+
             var total = _vault.Document.Live.Count();
             var shown = VisibleAccounts.Count;
-            return shown == total
-                ? total + (total == 1 ? " account" : " accounts")
-                : shown + " of " + total + " accounts";
+
+            return total == 0 ? "NO ACCOUNTS YET" : shown + " OF " + total + " SHOWN";
         }
     }
 
@@ -214,6 +294,11 @@ public sealed class MainViewModel : INotifyPropertyChanged
 
         var matches = _vault.Document.Search(_searchText);
 
+        // League-only today, so VALORANT legitimately matches nothing. Saying "0 of 9 shown" is
+        // more honest than hiding a segment the design puts on screen.
+        if (string.Equals(_gameFilter, "VALORANT", StringComparison.Ordinal))
+            matches = matches.Where(_ => false);
+
         if (!string.Equals(_regionFilter, AllRegions, StringComparison.Ordinal))
             matches = matches.Where(a => string.Equals(a.Region, _regionFilter, StringComparison.OrdinalIgnoreCase));
 
@@ -224,10 +309,43 @@ public sealed class MainViewModel : INotifyPropertyChanged
             .OrderByDescending(a => a.IsFavourite)
             .ToList();
 
-        foreach (var account in ordered) VisibleAccounts.Add(new AccountTile(account));
+        // Tiles are REUSED across filters, keyed by the account they wrap.
+        //
+        // Rebuilding them discarded and re-decoded every profile icon on each keystroke, and it also
+        // meant no card could ever update in place — the grid only appeared to work because it was
+        // being thrown away and rebuilt. Reuse is what lets a rank refresh or a LIVE badge repaint
+        // without the grid reshuffling under the pointer.
+        foreach (var account in ordered)
+        {
+            if (!_tiles.TryGetValue(account, out var tile))
+            {
+                tile = new AccountTile(account);
+                _tiles[account] = tile;
+            }
+
+            VisibleAccounts.Add(tile);
+        }
+
+        // Drop tiles for accounts that are gone entirely, so a long session does not accumulate them.
+        if (_tiles.Count > ordered.Count)
+        {
+            var live = ordered.ToHashSet();
+
+            foreach (var stale in _tiles.Keys.Where(a => !live.Contains(a)).ToList())
+            {
+                if (!_vault.Document.Live.Contains(stale)) _tiles.Remove(stale);
+            }
+        }
+
+        GridItems.Clear();
+        foreach (var tile in VisibleAccounts) GridItems.Add(tile);
+        GridItems.Add(AddAccountTile.Instance);
 
         MarkFlags();
         OnPropertyChanged(nameof(AccountCountText));
+        OnPropertyChanged(nameof(AccountCount));
+        OnPropertyChanged(nameof(FleetCount));
+        OnPropertyChanged(nameof(LootCount));
         OnPropertyChanged(nameof(RegionOptions));
     }
 

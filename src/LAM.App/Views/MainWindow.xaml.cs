@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -29,15 +30,28 @@ public partial class MainWindow : Window
         _services = new AppServices();
         DataContext = _model;
 
+        // Before anything paints. The lock screen is drawn long before the vault is open, so reading
+        // the palette from the encrypted settings would mean opening light and flipping at unlock.
+        ThemeSwitcher.Apply(ThemePreference.Read(_services.Paths.Root));
+
         Loaded += OnLoaded;
         Closing += OnClosing;
 
         // The hint text depends on the filtered list, so keep it in step with the list itself
         // rather than remembering to update it at every call site that re-filters.
+        // Status messages become toasts. The status bar keeps the standing facts (account count,
+        // client state); transient news belongs in the corner where the design puts it.
+        _model.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(MainViewModel.Status)) ShowToast(_model.Status);
+        };
+
         _model.VisibleAccounts.CollectionChanged += (_, _) =>
         {
             UpdateEmptyHint();
             LoadIcons();
+            NumberTheCards();
+            UpdateChrome();
         };
 
         // Any interaction counts as activity, so the idle lock only fires when the app really has
@@ -47,6 +61,8 @@ public partial class MainWindow : Window
 
         SystemEvents.SessionSwitch += OnSessionSwitch;
         StateChanged += OnStateChanged;
+
+        SetUpTray();
 
         // "/" focuses search, the way it does everywhere else.
         PreviewKeyDown += OnGlobalKey;
@@ -58,17 +74,14 @@ public partial class MainWindow : Window
     {
         var exists = _services.Paths.VaultExists;
 
-        LockTitle.Text = exists ? "Unlock your accounts" : "Create your vault";
-        LockSubtitle.Text = exists
-            ? "Your accounts are encrypted on this machine."
-            : "Pick a master password. It encrypts every account and password you store here.";
+        RenderLockPanel(exists, null);
 
         ConfirmPanel.Visibility = exists ? Visibility.Collapsed : Visibility.Visible;
-        UnlockButton.Content = exists ? "Unlock" : "Create vault";
 
         if (exists && _services.Hello.IsEnrolled && await HelloUnlock.IsAvailableAsync())
         {
             HelloButton.Visibility = Visibility.Visible;
+            HelloDivider.Visibility = Visibility.Visible;
             // Offer Hello straight away — it is the intended everyday path.
             await TryHelloAsync(silentOnCancel: true);
         }
@@ -100,6 +113,184 @@ public partial class MainWindow : Window
 
             await Task.Delay(TimeSpan.FromSeconds(15));
         }
+    }
+
+    // ---- window chrome -----------------------------------------------------
+    //
+    // The window is frameless via WindowChrome, so the caption buttons are ordinary Buttons and have
+    // to do the work the OS would otherwise do.
+
+    private void OnMinimise(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
+
+    private void OnMaximise(object sender, RoutedEventArgs e)
+    {
+        WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+        UpdateMaximiseGlyph();
+    }
+
+    private void OnCloseWindow(object sender, RoutedEventArgs e) => Close();
+
+    /// <summary>
+    /// Keeps the maximise glyph honest.
+    ///
+    /// The state changes without the button being pressed — a double-click on the caption, a drag to
+    /// the top of the screen, Win+Up — so the glyph is driven from the state rather than toggled.
+    /// </summary>
+    private void UpdateMaximiseGlyph()
+    {
+        if (MaximiseButton is null) return;
+
+        MaximiseButton.Content = WindowState == WindowState.Maximized ? "❐" : "□";
+        MaximiseButton.ToolTip = WindowState == WindowState.Maximized ? "Restore" : "Maximise";
+    }
+
+    // ---- navigation --------------------------------------------------------
+
+    /// <summary>
+    /// Switches pane. The toolbar belongs to Accounts alone, so it comes and goes with it.
+    /// </summary>
+    private void OnTabChanged(object sender, RoutedEventArgs e)
+    {
+        // Fires during InitializeComponent, before the rest of the tree exists.
+        if (AccountsPane is null || PaneHost is null) return;
+
+        var accounts = TabAccounts.IsChecked == true;
+
+        AccountsPane.Visibility = accounts ? Visibility.Visible : Visibility.Collapsed;
+        AccountsToolbar.Visibility = accounts ? Visibility.Visible : Visibility.Collapsed;
+        PaneHost.Visibility = accounts ? Visibility.Collapsed : Visibility.Visible;
+
+        if (accounts)
+        {
+            PaneHost.Content = null;
+            UpdateEmptyHint();
+            return;
+        }
+
+        var vault = _model.Vault;
+        if (vault is null) return;
+
+        PaneHost.Content = true switch
+        {
+            _ when TabFleet.IsChecked == true => new FleetPane(vault.Document.Accounts, _services),
+            _ when TabLoot.IsChecked == true => new LootPane(vault.Document.Accounts, _services),
+            _ => new SettingsPane(vault, _services),
+        };
+    }
+
+    private void OnAddAccountTile(object sender, MouseButtonEventArgs e) => OnAddAccount(sender, e);
+
+    private void OnCycleSort(object sender, RoutedEventArgs e) => _model.CycleSort();
+
+    private void OnGameFilter(object sender, RoutedEventArgs e)
+    {
+        if (sender is RadioButton { Tag: string game }) _model.GameFilter = game;
+    }
+
+    /// <summary>The icon frame swallows its click, so filling an icon is never a sign-in.</summary>
+    private void OnIconClicked(object sender, MouseButtonEventArgs e) => e.Handled = true;
+
+    /// <summary>
+    /// Gives each visible card its part code.
+    ///
+    /// Assigned by position rather than stored: the rail is a drawing convention, not a property of
+    /// the account, and a stored code would go stale the moment the list was filtered or reordered.
+    /// </summary>
+    private void NumberTheCards()
+    {
+        for (var i = 0; i < _model.VisibleAccounts.Count; i++)
+            _model.VisibleAccounts[i].PartCode = "ACC-" + (i + 1).ToString("00");
+    }
+
+    private System.Windows.Threading.DispatcherTimer? _toastTimer;
+
+    /// <summary>The design's one rise: 8px up and fade in, 180ms ease-out.</summary>
+    private static System.Windows.Media.Animation.Storyboard BuildRise()
+    {
+        var fade = new System.Windows.Media.Animation.DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(180));
+        System.Windows.Media.Animation.Storyboard.SetTargetProperty(
+            fade, new PropertyPath(OpacityProperty));
+
+        var slide = new System.Windows.Media.Animation.DoubleAnimation(8, 0, TimeSpan.FromMilliseconds(180))
+        {
+            EasingFunction = new System.Windows.Media.Animation.CubicEase
+            {
+                EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut,
+            },
+        };
+        System.Windows.Media.Animation.Storyboard.SetTargetProperty(
+            slide, new PropertyPath("(UIElement.RenderTransform).(TranslateTransform.Y)"));
+
+        var board = new System.Windows.Media.Animation.Storyboard();
+        board.Children.Add(fade);
+        board.Children.Add(slide);
+        return board;
+    }
+
+    /// <summary>
+    /// Shows a transient message.
+    ///
+    /// The previous timer is always cancelled first, so a burst of messages replaces rather than
+    /// stacks — two toasts fading independently is how a tidy corner becomes a mess.
+    /// </summary>
+    private void ShowToast(string message)
+    {
+        if (string.IsNullOrWhiteSpace(message)) return;
+
+        ToastText.Text = message.ToUpperInvariant();
+        Toast.Visibility = Visibility.Visible;
+
+        // Its own storyboard, deliberately. Storyboard.SetTarget mutates the resource in place, so
+        // retargeting the shared RamRise would make any two surfaces animating at once fight over one
+        // object — and it throws outright if the resource is ever frozen.
+        Toast.BeginStoryboard(BuildRise());
+
+        _toastTimer?.Stop();
+        _toastTimer = new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(2600),
+        };
+        _toastTimer.Tick += (_, _) =>
+        {
+            _toastTimer?.Stop();
+            Toast.Visibility = Visibility.Collapsed;
+        };
+        _toastTimer.Start();
+    }
+
+    /// <summary>Fills the chrome bands that are not data-bound.</summary>
+    private void UpdateChrome()
+    {
+        var vault = _model.Vault;
+        var accounts = vault?.Document.Live.ToList() ?? [];
+
+        VersionText.Text = "v" + (System.Reflection.Assembly.GetExecutingAssembly()
+            .GetName().Version?.ToString(3) ?? "1.0.0");
+
+        var regions = accounts.Select(a => a.Region)
+            .Where(r => !string.IsNullOrWhiteSpace(r))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Count();
+
+        StatusLeft.Text = accounts.Count == 0
+            ? "EMPTY VAULT · NOTHING STORED YET · LOCAL ONLY"
+            : accounts.Count + " ACCOUNTS · " + regions + " REGIONS · VAULT ENCRYPTED (AES-GCM) · LOCAL ONLY";
+
+        var lockfile = _services.RiotPaths.LeagueLockfile;
+        var clientUp = lockfile is not null && System.IO.File.Exists(lockfile);
+
+        ClientDot.Visibility = clientUp ? Visibility.Visible : Visibility.Collapsed;
+        StatusRight.Text = clientUp ? "LEAGUE CLIENT DETECTED · LCU ONLY" : "LEAGUE CLIENT NOT RUNNING";
+
+        var newest = accounts
+            .Select(a => a.Identity.ClientStats?.CapturedUtc)
+            .Where(when => when is not null)
+            .DefaultIfEmpty(null)
+            .Max();
+
+        SyncedText.Text = newest is { } stamp
+            ? "SYNCED " + stamp.LocalDateTime.ToString("d MMM").ToUpperInvariant()
+            : "NEVER SYNCED";
     }
 
     private void OnGlobalKey(object sender, KeyEventArgs e)
@@ -140,9 +331,152 @@ public partial class MainWindow : Window
 
     private void OnStateChanged(object? sender, EventArgs e)
     {
+        UpdateMaximiseGlyph();
+
         var vault = _model.Vault;
-        if (WindowState == WindowState.Minimized && vault is { IsLocked: false } && vault.Settings.LockOnMinimize)
+        if (WindowState != WindowState.Minimized) return;
+
+        if (vault is { IsLocked: false } && vault.Settings.LockOnMinimize)
             LockVault(VaultLockReason.Requested);
+
+        // Hiding is what takes it off the taskbar; minimising alone only shrinks it. Order matters:
+        // lock first, so a vault set to lock on minimise is already locked before it disappears.
+        if (vault?.Settings.MinimizeToTray == true) Hide();
+    }
+
+    // ---- tray and quick swap -----------------------------------------------
+
+    /// <summary>
+    /// The live stealth session, if a sign-in started one.
+    ///
+    /// Held here rather than inside the login task because the client keeps its chat connection open
+    /// for as long as it runs — tearing the proxy down when the sign-in finished would kill chat a
+    /// few seconds after the user got in.
+    /// </summary>
+    private LAM.Core.Stealth.StealthSession? _stealth;
+
+    private TrayIcon? _tray;
+    private GlobalHotkey? _hotkey;
+    private QuickSwapFlyout? _flyout;
+
+    private void SetUpTray()
+    {
+        _tray = new TrayIcon();
+
+        _tray.Activated += ShowQuickSwap;
+
+        // Only offer the submenu when stealth is actually running; ticking a mode that cannot take
+        // effect would be a lie.
+        _tray.StealthMode = () => _model.Vault?.Settings is { StealthLogin: true } settings
+            ? settings.StealthMode
+            : null;
+
+        _tray.StealthModeRequested += mode => _ = ApplyStealthModeAsync(mode);
+        _tray.OpenRequested += RestoreFromTray;
+        _tray.LockRequested += () => LockVault(VaultLockReason.Requested);
+        _tray.ExitRequested += () =>
+        {
+            if (_flyout is not null) _flyout.IsShuttingDown = true;
+            Application.Current.Shutdown();
+        };
+
+        Loaded += (_, _) =>
+        {
+            _hotkey = new GlobalHotkey();
+            _hotkey.Pressed += ShowQuickSwap;
+            _hotkey.Attach(this);
+
+            // A hotkey another app already owns is a lost convenience, not a fault: say so once in
+            // the status line rather than raising a dialog at startup.
+            if (!_hotkey.IsRegistered)
+                _model.Status = "alt + \\ is taken by another app - quick swap is on the tray icon";
+        };
+
+        _services.Orchestrator.StealthStarted += session =>
+        {
+            // One at a time: a second sign-in replaces the first, and the old client is already gone.
+            _stealth?.Dispose();
+            _stealth = session;
+
+            // The fake friend can ask for a mode too, and it must land in the same place as the tray
+            // and the settings pane or the three would disagree.
+            session.ModeRequested += mode =>
+                Dispatcher.Invoke(() => _ = ApplyStealthModeAsync(mode));
+        };
+
+        Closed += (_, _) =>
+        {
+            _stealth?.Dispose();
+            _hotkey?.Dispose();
+            _tray?.Dispose();
+
+            if (_flyout is not null)
+            {
+                _flyout.IsShuttingDown = true;
+                _flyout.Close();
+            }
+        };
+    }
+
+    /// <summary>
+    /// Changes how the account appears, and makes it take effect now.
+    ///
+    /// Persisted first, then pushed: the setting is what a later sign-in reads, and the live push is
+    /// what the current session sees. Without the push nothing happens until the client next decides
+    /// to send presence, which can be minutes.
+    /// </summary>
+    private async Task ApplyStealthModeAsync(LAM.Core.Stealth.StealthMode mode)
+    {
+        var vault = _model.Vault;
+        if (vault is null || vault.IsLocked) return;
+
+        vault.Settings.StealthMode = mode;
+
+        try { vault.Save(); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _model.Status = "Could not save the stealth mode.";
+        }
+
+        if (_stealth is not null) await _stealth.RefreshPresenceAsync();
+
+        _model.Status = "Appearing " + mode.ToString().ToLowerInvariant() + ".";
+    }
+
+    private void RestoreFromTray()
+    {
+        Show();
+        WindowState = WindowState.Normal;
+        Activate();
+    }
+
+    private void ShowQuickSwap()
+    {
+        var vault = _model.Vault;
+
+        // Kept and re-shown, not recreated: a hotkey-raised panel has to feel instant or it is slower
+        // than alt-tabbing to the manager, which is the whole reason it exists.
+        if (_flyout is null)
+        {
+            _flyout = new QuickSwapFlyout();
+            _flyout.SignInRequested += async tile =>
+            {
+                RestoreFromTray();
+                await SignInAsync(tile);
+            };
+            _flyout.OpenManagerRequested += RestoreFromTray;
+            _flyout.LockRequested += () => LockVault(VaultLockReason.Requested);
+        }
+
+        if (_flyout.IsVisible)
+        {
+            _flyout.Hide();
+            return;
+        }
+
+        _flyout.ShowNear(
+            vault is { IsLocked: false } ? _model.VisibleAccounts : [],
+            vault is null || vault.IsLocked);
     }
 
     // ---- unlocking ---------------------------------------------------------
@@ -233,6 +567,20 @@ public partial class MainWindow : Window
         vault.Locked += OnVaultLocked;
         vault.StartIdleTimer();
 
+        // The vault's own setting is authoritative; re-apply in case it disagrees with the mirror
+        // (another machine, a restored backup) and put the mirror back in step.
+        var theme = vault.Settings.UseDarkTheme ? AppTheme.Dark : AppTheme.Light;
+        ThemeSwitcher.Apply(theme);
+        ThemePreference.Write(_services.Paths.Root, theme);
+
+        // Mirror the two numbers the lock screen needs before anything can be decrypted. Written on
+        // unlock rather than on every save: they change rarely, and a count one session out of date
+        // is better than touching the disk on every edit.
+        LockScreenFacts.Write(
+            _services.Paths.Root,
+            vault.Document.Live.Count(),
+            vault.Settings.AutoLockMinutes);
+
         _model.SetVault(vault);
         _model.Status = "Vault unlocked.";
         UpdateEmptyHint();
@@ -248,14 +596,14 @@ public partial class MainWindow : Window
         if (vault.Settings.WindowsHelloEnabled || _services.Hello.IsEnrolled) return;
         if (!await HelloUnlock.IsAvailableAsync()) return;
 
-        var answer = MessageBox.Show(
+        var answer = Dialog.Confirm(
+            this,
+            "Windows Hello",
             "Unlock with Windows Hello from now on?\n\n" +
             "Your master password keeps working — Hello is just a faster way in, and it never leaves this machine.",
-            "Windows Hello",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Question);
+            "Enable Hello");
 
-        if (answer != MessageBoxResult.Yes) return;
+        if (!answer) return;
 
         try
         {
@@ -266,7 +614,10 @@ public partial class MainWindow : Window
         }
         catch (HelloUnlockException ex)
         {
-            MessageBox.Show(ex.Message, "Windows Hello", MessageBoxButton.OK, MessageBoxImage.Information);
+            Dialog.Say(
+                this,
+                "Windows Hello",
+                ex.Message);
         }
     }
 
@@ -278,12 +629,10 @@ public partial class MainWindow : Window
             _model.Status = string.Empty;
             MasterPasswordBox.Clear();
 
-            LockSubtitle.Text = reason switch
-            {
-                VaultLockReason.Idle => "Locked after a period of inactivity.",
-                VaultLockReason.WorkstationLocked => "Locked because you locked Windows.",
-                _ => "Your accounts are encrypted on this machine.",
-            };
+            // Re-render rather than assign: writing prose here is what used to replace the design's
+            // lowercase copy with sentence-case English for the rest of the session.
+            ShowLockError(null);
+            RenderLockPanel(true, reason);
 
             MasterPasswordBox.Focus();
         });
@@ -302,10 +651,51 @@ public partial class MainWindow : Window
         vault.Lock(reason);
     }
 
+    /// <summary>
+    /// Fills the lock panel.
+    ///
+    /// Single entry point on purpose. The copy used to be written in two places — once at load and
+    /// again on every lock — and the second one quietly replaced the design's lowercase register with
+    /// sentence-case English that then never went away.
+    /// </summary>
+    private void RenderLockPanel(bool exists, VaultLockReason? reason)
+    {
+        LockTitle.Text = exists ? "VAULT LOCKED" : "NEW VAULT";
+        UnlockButton.Content = exists ? "UNLOCK THE VAULT" : "CREATE THE VAULT";
+
+        var facts = LockScreenFacts.Read(_services.Paths.Root);
+
+        if (!exists)
+        {
+            LockSubtitle.Text =
+                "pick a master password. it encrypts every account you store here, and there is no reset.";
+        }
+        else
+        {
+            // The count comes from the mirror file, so an unread vault simply omits it rather than
+            // claiming zero.
+            var lead = facts.AccountCount > 0
+                ? facts.AccountCount + " accounts sealed in AES-GCM. "
+                : "accounts sealed in AES-GCM. ";
+
+            LockSubtitle.Text = reason switch
+            {
+                VaultLockReason.Idle => lead + "locked after a spell of nothing. back in?",
+                VaultLockReason.WorkstationLocked => lead + "you locked windows, so it locked too.",
+                _ => lead + "drop the master password and let's go.",
+            };
+        }
+
+        LockFooter.Text = (facts.IdleMinutes > 0
+                              ? "AUTO-LOCKS AFTER " + facts.IdleMinutes + " MIN IDLE"
+                              : "AUTO-LOCKS WHEN IDLE")
+                          + " \u00b7 NOTHING LEAVES THIS MACHINE";
+    }
+
     private void ShowLockError(string? message)
     {
         LockError.Text = message ?? string.Empty;
-        LockError.Visibility = message is null ? Visibility.Collapsed : Visibility.Visible;
+        LockErrorPlate.Visibility = message is null ? Visibility.Collapsed : Visibility.Visible;
     }
 
     // ---- accounts ----------------------------------------------------------
@@ -327,6 +717,38 @@ public partial class MainWindow : Window
         _model.Status = "Added " + account.DisplayRiotId + ".";
     }
 
+    private void OnDismissWarning(object sender, RoutedEventArgs e)
+    {
+        // The plate sits inside the card, whose own click opens the account — swallow it, or
+        // dismissing a warning would also open a window.
+        e.Handled = true;
+
+        if (sender is not Button { Tag: AccountTile tile }) return;
+
+        var vault = RequireVault();
+        if (vault is null || !tile.DismissWarning()) return;
+
+        vault.Save();
+
+        // Refresh, not ApplyFilter: tiles are reused now, so re-running the whole filter would
+        // rebuild the grid for a change to one card.
+        tile.Refresh();
+
+        _model.Status = "Hidden on " + tile.Title + ". Restore it from the card menu.";
+    }
+
+    private void RestoreWarnings(AccountTile tile)
+    {
+        var vault = RequireVault();
+        if (vault is null) return;
+
+        tile.RestoreWarnings();
+        vault.Save();
+        tile.Refresh();
+
+        _model.Status = "Warnings restored for " + tile.Title + ".";
+    }
+
     private void OnCardMenu(object sender, RoutedEventArgs e)
     {
         if (sender is not Button { Tag: AccountTile tile }) return;
@@ -343,6 +765,9 @@ public partial class MainWindow : Window
         menu.Items.Add(MenuItemFor("Refresh rank and level", async () => await RefreshOneAsync(tile)));
         menu.Items.Add(MenuItemFor("Estimate account age", async () => await EstimateAgeAsync(tile)));
         menu.Items.Add(new Separator());
+        if (tile.HasDismissedWarnings)
+            menu.Items.Add(MenuItemFor("Show hidden warnings", () => RestoreWarnings(tile)));
+
         menu.Items.Add(MenuItemFor("Forget saved session", () => ForgetSession(tile)));
         menu.Items.Add(MenuItemFor("Move to trash…", () => RemoveAccount(tile)));
 
@@ -398,15 +823,15 @@ public partial class MainWindow : Window
         var vault = RequireVault();
         if (vault is null) return;
 
-        var answer = MessageBox.Show(
+        var answer = Dialog.Confirm(
+            this,
+            "Move to trash",
             "Move " + tile.Account.DisplayRiotId + " to the trash?\n\n" +
             "It disappears from the grid but keeps its password and recovery details, and can be " +
             "restored from Vault. The Riot account itself is untouched.",
-            "Move to trash",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Question);
+            "Move to trash");
 
-        if (answer != MessageBoxResult.Yes) return;
+        if (!answer) return;
 
         tile.Account.DeletedUtc = DateTimeOffset.UtcNow;
         vault.Save();
@@ -443,26 +868,46 @@ public partial class MainWindow : Window
             : tile.Account.DisplayRiotId + " unpinned.";
     }
 
-    /// <summary>Opens the vault's own health and trash view.</summary>
-    private void OnOpenVault(object sender, RoutedEventArgs e)
-    {
-        var vault = RequireVault();
-        if (vault is null) return;
-
-        new VaultWindow(vault, _services.Repository) { Owner = this }.ShowDialog();
-
-        vault.Save();
-        _model.ApplyFilter();
-        UpdateEmptyHint();
-    }
-
     // ---- signing in --------------------------------------------------------
 
-    /// <summary>Opens the account. Signing in is a separate, deliberate button.</summary>
+    /// <summary>
+    /// Opens the account. Signing in is the footer button, deliberately.
+    ///
+    /// Signing in is not an undoable gesture — it drives the real Riot client and types a real
+    /// password — so it stays behind the one control that says it will, and the whole card surface
+    /// keeps the safe action. The design shows a card whose body is the login target, but the footer
+    /// here was already a working "LOG IN ->" button, so nothing was advertising a behaviour it did
+    /// not have; moving login onto the body only made a misclick expensive.
+    /// </summary>
     private void OnCardClicked(object sender, MouseButtonEventArgs e)
     {
         if (sender is not FrameworkElement { DataContext: AccountTile tile }) return;
         OpenDetail(tile);
+    }
+
+    /// <summary>
+    /// The keyboard equivalent of clicking the card.
+    ///
+    /// A clickable Border is invisible to Tab, so the grid was mouse-only in a design that mandates a
+    /// focus ring on every focusable control — the ring had nothing to draw on. Enter opens the
+    /// account, matching the mouse; Space is deliberately not bound, because it is the key most often
+    /// pressed while scrolling.
+    /// </summary>
+    private void OnCardKey(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter) return;
+        if (sender is not FrameworkElement { DataContext: AccountTile tile }) return;
+
+        e.Handled = true;
+        OpenDetail(tile);
+    }
+
+    private void OnTileKey(object sender, KeyEventArgs e)
+    {
+        if (e.Key is not (Key.Enter or Key.Space)) return;
+
+        e.Handled = true;
+        OnAddAccount(sender, e);
     }
 
     private async void OnSignInClicked(object sender, RoutedEventArgs e)
@@ -472,21 +917,6 @@ public partial class MainWindow : Window
 
         if (sender is not Button { Tag: AccountTile tile }) return;
         await SignInAsync(tile);
-    }
-
-    /// <summary>
-    /// Opens the fleet view over every account, not just the filtered ones.
-    ///
-    /// Deliberately unfiltered: "who owns this skin" is a question about the whole vault, and
-    /// answering it from a search-narrowed subset would confidently tell you nobody owns something
-    /// that an account hidden by the current filter has.
-    /// </summary>
-    private void OnOpenFleet(object sender, RoutedEventArgs e)
-    {
-        var vault = RequireVault();
-        if (vault is null) return;
-
-        new FleetWindow(vault.Document.Accounts, _services) { Owner = this }.ShowDialog();
     }
 
     private void OpenDetail(AccountTile tile)
@@ -512,10 +942,11 @@ public partial class MainWindow : Window
 
         if (!tile.CanSignIn)
         {
-            MessageBox.Show(
+            Dialog.Say(
+                this,
+                "Nothing to sign in with",
                 "This account has no saved password and no usable session, so there is nothing to sign in with. " +
-                "Edit it and add the password.",
-                "Nothing to sign in with", MessageBoxButton.OK, MessageBoxImage.Information);
+                "Edit it and add the password.");
             return;
         }
 
@@ -555,11 +986,19 @@ public partial class MainWindow : Window
 
             _model.EndBusy(result.Message);
 
+            // The design's "you're in - glhf". Only when the window is out of the way: a notification
+            // about the window you are already looking at is noise.
+            if (result.IsSuccess && (!IsVisible || WindowState == WindowState.Minimized))
+            {
+                _tray?.Notify("you're in - glhf", "Signed in as " + tile.Title + ".");
+            }
+
             if (!result.IsSuccess)
             {
-                MessageBox.Show(result.Message, "Could not sign in",
-                    MessageBoxButton.OK,
-                    result.Outcome == LoginOutcome.Aborted ? MessageBoxImage.Information : MessageBoxImage.Warning);
+                Dialog.Say(
+                    this,
+                    "Could not sign in",
+                    result.Message);
             }
 
             if (saveError is not null)
@@ -567,10 +1006,11 @@ public partial class MainWindow : Window
                 // Worth its own message: the sign-in itself may have been fine, but anything learned
                 // along the way — a captured session above all — has just been lost, so the next
                 // sign-in will type the password again.
-                MessageBox.Show(
+                Dialog.Say(
+                    this,
+                    "Could not save",
                     "Signed in, but the vault could not be saved, so this account's session and " +
-                    "details were not kept. The next sign-in will type the password again.\n\n" + saveError,
-                    "Could not save", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    "details were not kept. The next sign-in will type the password again.\n\n" + saveError);
             }
         }
         catch (OperationCanceledException)
@@ -580,7 +1020,10 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             _model.EndBusy("Sign-in failed.");
-            MessageBox.Show(ex.Message, "Could not sign in", MessageBoxButton.OK, MessageBoxImage.Warning);
+            Dialog.Say(
+                this,
+                "Could not sign in",
+                ex.Message);
         }
         finally
         {
@@ -611,10 +1054,11 @@ public partial class MainWindow : Window
         var key = vault.Settings.RiotApiKey;
         if (key is null || key.IsEmpty)
         {
-            MessageBox.Show(
+            Dialog.Say(
+                this,
+                "No API key",
                 "Add a Riot API key in Settings to look up ranks and levels.\n\n" +
-                "Use a Personal key from developer.riotgames.com — Development keys expire every 24 hours.",
-                "No API key", MessageBoxButton.OK, MessageBoxImage.Information);
+                "Use a Personal key from developer.riotgames.com — Development keys expire every 24 hours.");
             return;
         }
 
@@ -622,10 +1066,11 @@ public partial class MainWindow : Window
                                                           || a.Identity.GameName is not null).ToList();
         if (accounts.Count == 0)
         {
-            MessageBox.Show(
+            Dialog.Say(
+                this,
+                "Nothing to refresh",
                 "None of your accounts have been signed into yet, so there is nothing to look up. " +
-                "Sign in once and the client fills in the Riot ID automatically.",
-                "Nothing to refresh", MessageBoxButton.OK, MessageBoxImage.Information);
+                "Sign in once and the client fills in the Riot ID automatically.");
             return;
         }
 
@@ -665,12 +1110,18 @@ public partial class MainWindow : Window
         catch (RiotApiKeyRejectedException ex)
         {
             _model.EndBusy("API key rejected.");
-            MessageBox.Show(ex.Message, "Riot API", MessageBoxButton.OK, MessageBoxImage.Warning);
+            Dialog.Say(
+                this,
+                "Riot API",
+                ex.Message);
         }
         catch (RiotApiRateLimitedException ex)
         {
             _model.EndBusy("Rate limited.");
-            MessageBox.Show(ex.Message, "Riot API", MessageBoxButton.OK, MessageBoxImage.Information);
+            Dialog.Say(
+                this,
+                "Riot API",
+                ex.Message);
         }
         finally
         {
@@ -685,8 +1136,10 @@ public partial class MainWindow : Window
         var key = vault?.Settings.RiotApiKey;
         if (vault is null || key is null || key.IsEmpty)
         {
-            MessageBox.Show("Add a Riot API key in Settings first.", "No API key",
-                MessageBoxButton.OK, MessageBoxImage.Information);
+            Dialog.Say(
+                this,
+                "No API key",
+                "Add a Riot API key in Settings first.");
             return;
         }
 
@@ -703,7 +1156,10 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             _model.EndBusy("Refresh failed.");
-            MessageBox.Show(ex.Message, "Riot API", MessageBoxButton.OK, MessageBoxImage.Warning);
+            Dialog.Say(
+                this,
+                "Riot API",
+                ex.Message);
         }
     }
 
@@ -717,15 +1173,19 @@ public partial class MainWindow : Window
         var key = vault?.Settings.RiotApiKey;
         if (vault is null || key is null || key.IsEmpty)
         {
-            MessageBox.Show("Add a Riot API key in Settings first.", "No API key",
-                MessageBoxButton.OK, MessageBoxImage.Information);
+            Dialog.Say(
+                this,
+                "No API key",
+                "Add a Riot API key in Settings first.");
             return;
         }
 
         if (tile.Account.Identity.RiotAccountId is null)
         {
-            MessageBox.Show("Sign in to this account once first, so the client can tell us its PUUID.",
-                "Not enough information", MessageBoxButton.OK, MessageBoxImage.Information);
+            Dialog.Say(
+                this,
+                "Not enough information",
+                "Sign in to this account once first, so the client can tell us its PUUID.");
             return;
         }
 
@@ -750,12 +1210,18 @@ public partial class MainWindow : Window
             tile.Refresh();
 
             _model.EndBusy(estimate.Describe());
-            MessageBox.Show(estimate.Describe(), "Account age", MessageBoxButton.OK, MessageBoxImage.Information);
+            Dialog.Say(
+                this,
+                "Account age",
+                estimate.Describe());
         }
         catch (Exception ex)
         {
             _model.EndBusy("Could not estimate the age.");
-            MessageBox.Show(ex.Message, "Riot API", MessageBoxButton.OK, MessageBoxImage.Warning);
+            Dialog.Say(
+                this,
+                "Riot API",
+                ex.Message);
         }
     }
 

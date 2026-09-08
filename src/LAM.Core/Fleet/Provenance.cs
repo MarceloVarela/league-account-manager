@@ -7,9 +7,9 @@ namespace LAM.Core.Fleet;
 /// What happened to an account, and when — reconstructed from the dates the client attaches to
 /// everything it owns.
 ///
-/// This matters most for an account you did not make. The dates say what the previous owner did and
-/// what you did, which is the difference between a collection you can account for in a support
-/// ticket and one you can only guess at.
+/// Two jobs. The dates are the strongest evidence of an account's age that exists outside Riot's own
+/// records, which is what a support ticket asks for. And the recovery-path checks say whether anyone
+/// other than you could still take the account back.
 /// </summary>
 public static class Provenance
 {
@@ -35,47 +35,13 @@ public static class Provenance
     }
 
     /// <summary>
-    /// Splits the collection at the date the account changed hands.
+    /// Whether anyone other than you could still recover this account.
     ///
-    /// Returns null when there is nothing to split by — an account you have always owned has no
-    /// "before", and inventing a pivot would produce a confident and meaningless answer.
+    /// Every check is about control of the RECOVERY PATH rather than about use: whoever holds the
+    /// registered mailbox can start a recovery at any time, and no amount of playing on an account
+    /// changes that. Signing in every day proves nothing; holding the mailbox proves everything.
     /// </summary>
-    public static OwnershipSplit? SplitByOwnership(AccountEntry account, SkinCatalogue catalogue)
-    {
-        if (account.Recovery.OwnedSince is not { } ownedSince) return null;
-
-        var pivot = new DateTimeOffset(ownedSince.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
-
-        var before = new List<CatalogueSkin>();
-        var after = new List<CatalogueSkin>();
-        var undated = 0;
-
-        foreach (var id in account.Identity.OwnedSkinIds)
-        {
-            if (SkinCatalogue.IsJadeSkin(id)) continue;
-
-            var skin = catalogue.Skin(id) ?? new CatalogueSkin(id, "Skin " + id, id / 1000, null, null, null);
-            var acquired = account.Identity.SkinAcquiredUtc(id);
-
-            if (acquired is null) undated++;
-            else if (acquired < pivot) before.Add(skin);
-            else after.Add(skin);
-        }
-
-        return new OwnershipSplit(pivot, Sort(before), Sort(after), undated);
-
-        static IReadOnlyList<CatalogueSkin> Sort(List<CatalogueSkin> skins)
-            => [.. skins.OrderBy(s => s.Name, StringComparer.CurrentCultureIgnoreCase)];
-    }
-
-    /// <summary>
-    /// How exposed the account is to being taken back by whoever had it before.
-    ///
-    /// This is the part buyer guides are actually about. A seller who still holds the registered
-    /// mailbox can start a recovery at any time, and no amount of playing on the account changes
-    /// that — so the checks are about control of the recovery path, not about use.
-    /// </summary>
-    public static IReadOnlyList<ExposureCheck> RecallExposure(AccountEntry account)
+    public static IReadOnlyList<ExposureCheck> RecoveryExposure(AccountEntry account)
     {
         var recovery = account.Recovery;
         var observed = account.Identity.Observed;
@@ -87,18 +53,10 @@ public static class Provenance
             "Whoever holds the registered mailbox can start a recovery. This is the single check "
             + "that decides whether an account is really yours."));
 
-        var changedAfter = observed?.PasswordChangedUtc is { } changed
-                           && recovery.OwnedSince is { } since
-                           && changed > new DateTimeOffset(since.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
-
-        checks.Add(new ExposureCheck(
-            "Password changed since you got it",
-            recovery.OwnedSince is null || changedAfter,
-            recovery.OwnedSince is null
-                ? "Set \"owned since\" on the account to check this."
-                : "The client reports the last password change. If it predates your ownership, the "
-                  + "previous owner may still know the password."));
-
+        // The last password change is reported by the client, but there is nothing honest to compare
+        // it against: the app has no date for when the account became yours, and inventing one would
+        // produce a confident, meaningless answer. So the checks below are all about the recovery
+        // path, which is what actually decides who can take an account back.
         checks.Add(new ExposureCheck(
             "Two-factor is on",
             recovery.MfaLooksEnabled(observed),
@@ -107,7 +65,7 @@ public static class Provenance
         checks.Add(new ExposureCheck(
             "A phone number is on file",
             observed?.PhoneOnFile == true,
-            "A phone number is a recovery route. If it is not yours, it is someone else's."));
+            "A phone number is a recovery route, so it has to be one you hold."));
 
         checks.Add(new ExposureCheck(
             "Recovery details are recorded here",
@@ -119,18 +77,3 @@ public static class Provenance
 }
 
 public sealed record ExposureCheck(string Title, bool Passed, string Why);
-
-/// <summary>A collection divided into what came before you and what came after.</summary>
-public sealed record OwnershipSplit(
-    DateTimeOffset OwnedSinceUtc,
-    IReadOnlyList<CatalogueSkin> BeforeYou,
-    IReadOnlyList<CatalogueSkin> SinceYou,
-    int Undated)
-{
-    public string Describe()
-    {
-        var text = BeforeYou.Count + " skins predate your ownership, " + SinceYou.Count + " came after.";
-        if (Undated > 0) text += " " + Undated + " have no recorded date.";
-        return text;
-    }
-}

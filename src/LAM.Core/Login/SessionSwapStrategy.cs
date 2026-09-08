@@ -98,8 +98,14 @@ public sealed class SessionSwapStrategy : ILoginStrategy
 
         ApplyRegion(context);
 
+        // Stealth has to be listening BEFORE the client starts: the client reads where chat lives
+        // exactly once, at launch, and an already-running client cannot be redirected.
+        var stealth = context.BeginStealth is null
+            ? string.Empty
+            : await context.BeginStealth(cancellationToken);
+
         context.Report(LoginStage.LaunchingClient, "Starting League…");
-        _launcher.Launch();
+        _launcher.Launch(extraArguments: stealth);
 
         context.Report(LoginStage.WaitingForClient, "Waiting for the client…");
         var lockfile = await Lockfile.WaitForAsync(

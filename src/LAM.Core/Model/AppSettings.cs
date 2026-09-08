@@ -24,12 +24,53 @@ public sealed class AppSettings
     /// failure mode of it being on unnecessarily is a few dots on your own screen.
     /// </summary>
     public bool RedactWhileStreaming { get; set; } = true;
+
+    /// <summary>
+    /// Dark palette, and the default.
+    ///
+    /// The design leads with dark and calls it the home state; light is the alternate. Mirrored to
+    /// disk outside the vault by ThemePreference, because the lock screen has to paint before there
+    /// is anything decrypted to read this from.
+    /// </summary>
+    public bool UseDarkTheme { get; set; } = true;
     /// <summary>Minutes of inactivity before the vault re-locks. Zero disables the idle timer.</summary>
     public int AutoLockMinutes { get; set; } = 5;
 
     public bool LockOnWorkstationLock { get; set; } = true;
 
     public bool LockOnMinimize { get; set; }
+
+    /// <summary>
+    /// Minimising hides to the notification area instead of the taskbar.
+    ///
+    /// Off by default: an app that vanishes from the taskbar the first time you minimise it looks
+    /// like it crashed, so this is opted into rather than assumed.
+    /// </summary>
+    public bool MinimizeToTray { get; set; }
+
+    /// <summary>Whether alt + \ raises the quick-swap flyout system-wide.</summary>
+    public bool QuickSwapHotkey { get; set; } = true;
+
+    /// <summary>
+    /// Appear offline to the friends list.
+    ///
+    /// Off by default, like everything here that reaches outside this app. It works by standing
+    /// between the League client and Riot's chat server on this machine, so it is opted into
+    /// deliberately rather than inherited.
+    /// </summary>
+    public bool StealthLogin { get; set; }
+
+    /// <summary>What the friends list is told when stealth is on.</summary>
+    public Stealth.StealthMode StealthMode { get; set; } = Stealth.StealthMode.Offline;
+
+    /// <summary>
+    /// Whether lobby and champion-select chat keep working while stealth is on.
+    ///
+    /// On by default. The presence that makes those chats work is addressed at a room rather than at
+    /// the friends list, so it is not rewritten — which means a lobby can see a status the friends
+    /// list is not being told. Turning this off hides that too, at the cost of those chats.
+    /// </summary>
+    public bool LobbyChat { get; set; } = true;
 
     public StrategyPreference Strategy { get; set; } = StrategyPreference.PreferSessionSwap;
 

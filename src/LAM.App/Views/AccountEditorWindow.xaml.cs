@@ -89,7 +89,6 @@ public partial class AccountEditorWindow : Window
         CreatedYearBox.SelectedItem = Years.FirstOrDefault(y => y.Value == created?.Year) ?? Years[0];
         // A stored day of 1 with no month is how "year only" was saved; month 0 never occurs.
         CreatedMonthBox.SelectedItem = Months.FirstOrDefault(m => m.Number == created?.Month) ?? Months[0];
-        HowObtainedBox.Text = recovery.HowObtained ?? string.Empty;
         FirstChampionBox.Text = recovery.FirstChampionPurchased ?? string.Empty;
         PurchaseReferenceBox.Text = recovery.FirstPurchaseReference ?? string.Empty;
         MfaBox.IsChecked = recovery.MfaEnabled;
@@ -219,7 +218,6 @@ public partial class AccountEditorWindow : Window
         recovery.EmailPassword = string.IsNullOrEmpty(EmailPasswordBox.Password)
             ? null : new SecretText(EmailPasswordBox.Password);
         recovery.ApproximateCreated = ReadApproximateCreated();
-        recovery.HowObtained = Nullable(HowObtainedBox.Text);
         recovery.FirstChampionPurchased = Nullable(FirstChampionBox.Text);
         recovery.FirstPurchaseReference = Nullable(PurchaseReferenceBox.Text);
         recovery.MfaEnabled = MfaBox.IsChecked == true;

@@ -1,0 +1,70 @@
+<Window x:Class="LAM.App.Views.Dialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        ResizeMode="NoResize" SizeToContent="Height" Width="440"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+        Foreground="{DynamicResource Ink}"
+        FontFamily="{StaticResource BodyFont}"
+        KeyDown="OnKey">
+
+    <!--
+        The themed replacement for MessageBox.
+
+        A frameless, radius-0 app that raises a stock Windows message box has, at that moment, two
+        different visual languages on screen — and the OS box is the one the user is looking at. It
+        also ignores the theme entirely, so a dark window produced a light dialog.
+
+        Deliberately narrow in what it offers: a title, a body, and either one button or two. Every
+        one of the 36 calls it replaced was OK-only or a yes/no confirm.
+    -->
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Theme.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Window.Resources>
+
+    <Border Background="{DynamicResource Ground}" BorderBrush="{DynamicResource ShellBorder}"
+            BorderThickness="1" Margin="20" Effect="{DynamicResource Elevated}">
+        <Grid>
+            <!-- Registration marks: this is a large panel, which is where the design puts them. -->
+            <Path Data="M 0,0 L 11,0 M 5,0 L 5,11" Stroke="{DynamicResource RegMark}" StrokeThickness="1"
+                  HorizontalAlignment="Left" VerticalAlignment="Top" Margin="-6,-6,0,0" IsHitTestVisible="False" />
+            <Path Data="M 0,0 L 11,0 M 5,0 L 5,11" Stroke="{DynamicResource RegMark}" StrokeThickness="1"
+                  HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-6,-6,0" IsHitTestVisible="False" />
+            <Path Data="M 0,11 L 11,11 M 5,0 L 5,11" Stroke="{DynamicResource RegMark}" StrokeThickness="1"
+                  HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="-6,0,0,-6" IsHitTestVisible="False" />
+            <Path Data="M 0,11 L 11,11 M 5,0 L 5,11" Stroke="{DynamicResource RegMark}" StrokeThickness="1"
+                  HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-6,-6" IsHitTestVisible="False" />
+
+            <DockPanel>
+                <Border DockPanel.Dock="Top" Background="{DynamicResource RaisedSurface}"
+                        BorderBrush="{DynamicResource Divider}" BorderThickness="0,0,0,1"
+                        Padding="18,13" shell:WindowChrome.IsHitTestVisibleInChrome="True"
+                        MouseLeftButtonDown="OnDragBar">
+                    <TextBlock x:Name="TitleText" FontFamily="{StaticResource HeadingFont}"
+                               FontWeight="SemiBold" FontSize="17"
+                               Foreground="{DynamicResource Ink}" />
+                </Border>
+
+                <Border DockPanel.Dock="Bottom" BorderBrush="{DynamicResource Divider}"
+                        BorderThickness="0,1,0,0" Padding="18,12">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Button x:Name="CancelButton" Content="CANCEL" Click="OnCancel"
+                                MinHeight="32" Padding="16,0" Margin="0,0,9,0" Visibility="Collapsed" />
+                        <Button x:Name="ConfirmButton" Content="OK" Click="OnConfirm"
+                                Style="{StaticResource PrimaryButton}" MinHeight="32" Padding="18,0"
+                                IsDefault="True" />
+                    </StackPanel>
+                </Border>
+
+                <TextBlock x:Name="BodyText" Margin="18,16" TextWrapping="Wrap"
+                           FontFamily="{StaticResource BodyFont}" FontSize="13.5" LineHeight="19"
+                           Foreground="{DynamicResource MutedText}" />
+            </DockPanel>
+        </Grid>
+    </Border>
+</Window>

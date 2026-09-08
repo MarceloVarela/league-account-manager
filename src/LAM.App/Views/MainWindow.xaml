@@ -2,284 +2,834 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="clr-namespace:LAM.App.ViewModels"
-        Title="League Account Manager"
-        Height="760" Width="1000" MinHeight="520" MinWidth="720"
-        Background="{StaticResource Background}"
-        WindowStartupLocation="CenterScreen">
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+        Title="Hextech Manager"
+        Icon="pack://application:,,,/Assets/hextech.ico"
+        Height="720" Width="1100" MinHeight="560" MinWidth="880"
+        Background="{DynamicResource Ground}"
+        WindowStartupLocation="CenterScreen"
+        UseLayoutRounding="True" SnapsToDevicePixels="True"
+        Foreground="{DynamicResource Ink}"
+        FontFamily="{StaticResource BodyFont}"
+        TextOptions.TextFormattingMode="Ideal">
+
+    <!--
+        Frameless, but through WindowChrome rather than WindowStyle="None".
+
+        WindowStyle="None" gives a bare rectangle that loses snap, aero-snap layouts, the resize
+        grips and correct maximise bounds. WindowChrome keeps every one of those and simply lets the
+        client area paint over the caption, which is what the design needs.
+    -->
+    <shell:WindowChrome.WindowChrome>
+        <shell:WindowChrome CaptionHeight="38" ResizeBorderThickness="6"
+                            GlassFrameThickness="0" UseAeroCaptionButtons="False" />
+    </shell:WindowChrome.WindowChrome>
 
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
+        <vm:TierBrushConverter x:Key="TierBrush" />
         <vm:SignInModeBrushConverter x:Key="ModeBackground" Background="True" />
         <vm:SignInModeBrushConverter x:Key="ModeForeground" Background="False" />
     </Window.Resources>
 
-    <Grid>
+    <Border BorderBrush="{DynamicResource ShellBorder}" BorderThickness="1">
+        <Grid>
 
-        <!-- ============ UNLOCKED: the account grid ============ -->
-        <DockPanel Visibility="{Binding IsUnlocked, Converter={StaticResource BoolToVis}}">
+            <!--
+                The shell is a DockPanel so the title bar can dock above BOTH states.
 
-            <Border DockPanel.Dock="Top" Background="{StaticResource Surface}"
-                    BorderBrush="{StaticResource BorderBrushSoft}" BorderThickness="0,0,0,1" Padding="16,12">
+                It used to live inside the unlocked branch, so a locked window had no band at all —
+                no crest, no wordmark, no version, just two caption glyphs hovering over the
+                vignette. Screen 01 shows the full 38px bar above the lock panel.
+            -->
+            <DockPanel>
+              <!-- == title bar, 38 == -->
+              <Border DockPanel.Dock="Top" Height="38" Panel.ZIndex="10" Background="{DynamicResource Surface}"
+                      BorderBrush="{DynamicResource Divider}" BorderThickness="0,0,0,1">
+                  <Grid>
+                      <Grid.ColumnDefinitions>
+                          <ColumnDefinition Width="Auto" />
+                          <ColumnDefinition Width="*" />
+                          <ColumnDefinition Width="Auto" />
+                      </Grid.ColumnDefinitions>
+
+                      <StackPanel Grid.Column="0" Orientation="Horizontal" Margin="12,0,0,0"
+                                  VerticalAlignment="Center">
+                          <Image Source="pack://application:,,,/Assets/hextech-small.png"
+                                 Width="16" Height="16" VerticalAlignment="Center"
+                                 RenderOptions.BitmapScalingMode="HighQuality" />
+                          <TextBlock Text="HEXTECH MANAGER" Style="{StaticResource ChromeLabel}"
+                                     Margin="9,0,0,0" />
+                          <TextBlock x:Name="VersionText" Style="{StaticResource ChromeMono}"
+                                     Margin="9,1,0,0" />
+                      </StackPanel>
+
+                      <!-- Buttons must opt out of the caption, or WindowChrome swallows their clicks. -->
+                      <StackPanel Grid.Column="2" Orientation="Horizontal"
+                                  shell:WindowChrome.IsHitTestVisibleInChrome="True">
+                          <Button Style="{StaticResource ChromeButton}" Content="—" Click="OnMinimise"
+                                  ToolTip="Minimise" />
+                          <Button x:Name="MaximiseButton" Style="{StaticResource ChromeButton}"
+                                  Content="□" Click="OnMaximise" ToolTip="Maximise" />
+                          <Button Style="{StaticResource CloseButton}" Content="✕" Click="OnCloseWindow"
+                                  ToolTip="Close" />
+                      </StackPanel>
+                  </Grid>
+              </Border>
+
+
                 <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
 
-                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                        <TextBlock Text="Accounts" Style="{StaticResource Heading}" />
-                        <TextBlock Text="{Binding AccountCountText}" Style="{StaticResource Muted}" />
-                    </StackPanel>
+            <!-- ============================ SHELL ============================ -->
+            <DockPanel Visibility="{Binding IsUnlocked, Converter={StaticResource BoolToVis}}">
 
-                    <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="20,0"
-                                VerticalAlignment="Center" HorizontalAlignment="Left">
-                        <TextBox x:Name="SearchBox" Width="240" VerticalAlignment="Center"
-                                 Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged, Delay=120}"
-                                 ToolTip="Search by name, Riot ID, tag, note or recovery email.  Press / to focus." />
+                <!-- == nav tabs, 46 == -->
+                <Border DockPanel.Dock="Top" Height="46" Background="{DynamicResource Surface}"
+                        BorderBrush="{DynamicResource Divider}" BorderThickness="0,0,0,1">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
 
-                        <TextBlock Text="Sort" Style="{StaticResource Muted}" VerticalAlignment="Center"
-                                   Margin="14,0,6,0" />
-                        <ComboBox Width="112" VerticalAlignment="Center"
-                                  ItemsSource="{Binding SortOptions}" SelectedItem="{Binding Sort}" />
+                        <StackPanel Grid.Column="0" Orientation="Horizontal">
+                            <RadioButton x:Name="TabAccounts" Style="{StaticResource NavTab}" Content="ACCOUNTS"
+                                         GroupName="nav" IsChecked="True" Checked="OnTabChanged" Tag="{Binding AccountCount}" />
+                            <RadioButton x:Name="TabFleet" Style="{StaticResource NavTab}" Content="FLEET"
+                                         GroupName="nav" Checked="OnTabChanged" Tag="{Binding FleetCount}" />
+                            <RadioButton x:Name="TabLoot" Style="{StaticResource NavTab}" Content="LOOT"
+                                         GroupName="nav" Checked="OnTabChanged" Tag="{Binding LootCount}" />
+                            <RadioButton x:Name="TabSettings" Style="{StaticResource NavTab}" Content="SETTINGS"
+                                         GroupName="nav" Checked="OnTabChanged" />
+                        </StackPanel>
 
-                        <TextBlock Text="Region" Style="{StaticResource Muted}" VerticalAlignment="Center"
-                                   Margin="14,0,6,0" />
-                        <ComboBox Width="112" VerticalAlignment="Center"
-                                  ItemsSource="{Binding RegionOptions}" SelectedItem="{Binding RegionFilter}" />
-                    </StackPanel>
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="0,0,12,0"
+                                    VerticalAlignment="Center">
+                            <!-- The blinking square: the one piece of motion in the chrome, and the
+                                 only signal that the vault is open rather than merely on screen. -->
+                            <Button Content="REFRESH RANKS" Click="OnRefreshAll" MinHeight="26"
+                                    Padding="11,0" FontSize="12" Margin="0,0,14,0" />
+                            <TextBlock x:Name="SyncedText" Style="{StaticResource ChromeMono}"
+                                       Margin="0,0,14,0" />
 
-                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                        <Button Content="Add account" Style="{StaticResource PrimaryButton}"
-                                Click="OnAddAccount" Margin="0,0,8,0" />
-                        <Button Content="Refresh ranks" Click="OnRefreshAll" Margin="0,0,8,0"
-                                ToolTip="Look up rank and level for every account (needs a Riot API key)" />
-                        <Button Content="Vault" Click="OnOpenVault" Margin="0,0,8,0"
-                                ToolTip="Vault health, password reuse, backups and the trash" />
-                        <Button Content="Fleet" Click="OnOpenFleet" Margin="0,0,8,0"
-                                ToolTip="Search every account's collection at once, and see what is idle or expiring" />
-                        <Button Content="Settings" Click="OnOpenSettings" Margin="0,0,8,0" />
-                        <Button Content="Lock" Click="OnLock" />
-                    </StackPanel>
-                </Grid>
-            </Border>
+                            <Border x:Name="VaultDot" Width="6" Height="6" Background="{DynamicResource Ok}"
+                                    VerticalAlignment="Center">
+                                <Border.Triggers>
+                                    <EventTrigger RoutedEvent="Loaded">
+                                        <BeginStoryboard Storyboard="{StaticResource RamBlink}" />
+                                    </EventTrigger>
+                                </Border.Triggers>
+                            </Border>
+                            <TextBlock x:Name="VaultStateText" Style="{StaticResource ChromeMono}"
+                                       Margin="8,0,12,0" Text="VAULT OPEN" />
+                            <Button Content="LOCK" Click="OnLock" MinHeight="26" Padding="12,0" FontSize="12" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
 
-            <Border DockPanel.Dock="Bottom" Background="{StaticResource Surface}"
-                    BorderBrush="{StaticResource BorderBrushSoft}" BorderThickness="0,1,0,0" Padding="16,7">
-                <TextBlock Text="{Binding Status}" Style="{StaticResource Muted}" TextTrimming="CharacterEllipsis" />
-            </Border>
+                <!-- == status bar, 26 == -->
+                <Border DockPanel.Dock="Bottom" Height="26" Background="{DynamicResource Surface}"
+                        BorderBrush="{DynamicResource Divider}" BorderThickness="0,1,0,0">
+                    <Grid Margin="12,0">
+                        <TextBlock x:Name="StatusLeft" Style="{StaticResource ChromeMono}"
+                                   HorizontalAlignment="Left" TextTrimming="CharacterEllipsis" />
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                            <Border x:Name="ClientDot" Width="5" Height="5" Background="{DynamicResource Ok}"
+                                    VerticalAlignment="Center" Visibility="Collapsed" />
+                            <TextBlock x:Name="StatusRight" Style="{StaticResource ChromeMono}" Margin="7,0,0,0" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
 
-            <Grid>
-                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16,16,4,16">
-                    <ItemsControl ItemsSource="{Binding VisibleAccounts}">
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <WrapPanel Orientation="Horizontal" />
-                            </ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
+                <!-- == toolbar, 58 — accounts only ==
+                     Every child is fixed-width and nothing wraps: the design's row keeps its rhythm
+                     at any window size, and a wrapping toolbar is the first thing that makes a
+                     drafting layout look like a web page. -->
+                <Border x:Name="AccountsToolbar" DockPanel.Dock="Top" Height="58"
+                        BorderBrush="{DynamicResource Divider}" BorderThickness="0,0,0,1">
+                    <Grid Margin="22,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="290" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
 
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate DataType="{x:Type vm:AccountTile}">
-                                <Border Style="{StaticResource AccountCard}"
-                                        MouseLeftButtonUp="OnCardClicked" Cursor="Hand"
-                                        ToolTip="Click to open this account">
-                                    <StackPanel>
+                        <Grid Grid.Column="0" VerticalAlignment="Center">
+                            <TextBox x:Name="SearchBox" Padding="26,0,9,0" MinHeight="32"
+                                     Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                                     ToolTip="Search name, tagline, region, tags or rank" />
+                            <Ellipse Width="11" Height="11" HorizontalAlignment="Left" Margin="9,0,0,0"
+                                     VerticalAlignment="Center" IsHitTestVisible="False"
+                                     Stroke="{DynamicResource MutedText}" StrokeThickness="1" />
+                            <TextBlock Text="filter by name, region, tag…" Style="{StaticResource Mono}"
+                                       Margin="27,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"
+                                       Visibility="{Binding SearchIsEmpty, Converter={StaticResource BoolToVis}}" />
+                        </Grid>
 
-                                        <!-- Icon, name, rank, overflow menu -->
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="Auto" />
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="Auto" />
-                                            </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="14,0,0,0"
+                                    VerticalAlignment="Center">
+                            <RadioButton Style="{StaticResource Segment}" Content="ALL" GroupName="game"
+                                         IsChecked="True" Checked="OnGameFilter" Tag="ALL" />
+                            <RadioButton Style="{StaticResource Segment}" Content="LEAGUE" GroupName="game"
+                                         Checked="OnGameFilter" Tag="LEAGUE" Margin="-1,0,0,0" />
+                            <RadioButton Style="{StaticResource Segment}" Content="VALORANT" GroupName="game"
+                                         Checked="OnGameFilter" Tag="VALORANT" Margin="-1,0,0,0"
+                                         ToolTip="The app reads League only, so this matches nothing yet." />
+                        </StackPanel>
 
-                                            <!-- Ringed in the rank's colour; falls back to initials
-                                                 until an icon has been cached. -->
-                                            <Border Grid.Column="0" Width="52" Height="52" CornerRadius="26"
-                                                    Background="{StaticResource SurfaceRaised}"
-                                                    BorderBrush="{Binding RankBrush}" BorderThickness="2"
-                                                    Margin="0,0,12,0">
-                                                <Grid>
-                                                    <TextBlock Text="{Binding Initials}" FontSize="17"
-                                                               FontWeight="SemiBold"
-                                                               Foreground="{StaticResource MutedText}"
-                                                               HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                               Visibility="{Binding ShowInitials, Converter={StaticResource BoolToVis}}" />
-                                                    <!-- An Ellipse filled with the image, not a clipped Border:
-                                                         ClipToBounds does not respect CornerRadius in WPF, so the
-                                                         square corners of the icon printed behind the ring. -->
-                                                    <Ellipse Fill="{Binding IconBrush}"
-                                                             Visibility="{Binding HasIcon, Converter={StaticResource BoolToVis}}" />
-                                                </Grid>
-                                            </Border>
+                        <Button Grid.Column="2" Click="OnCycleSort" Margin="14,0,0,0" MinHeight="30"
+                                Padding="11,0" ToolTip="Cycle: last used → rank → name">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="SORT" Style="{StaticResource Mono}" VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding SortLabel}" Margin="7,0,0,0"
+                                           FontFamily="{StaticResource HeadingFont}" FontWeight="SemiBold"
+                                           FontSize="12.5" VerticalAlignment="Center" />
+                                <Path Data="M 0,0 L 9,0 L 4.5,5 Z" Fill="{DynamicResource Accent}"
+                                      Margin="8,2,0,0" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
 
-                                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                                <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="15"
-                                                           TextTrimming="CharacterEllipsis" />
-                                                <TextBlock Text="{Binding Subtitle}" Style="{StaticResource Muted}"
-                                                           TextTrimming="CharacterEllipsis" Margin="0,1,0,0" />
-                                                <TextBlock Text="{Binding RankText}" FontWeight="SemiBold"
-                                                           FontSize="12.5" Margin="0,5,0,0"
-                                                           Foreground="{Binding RankBrush}" />
+                        <ComboBox Grid.Column="3" Width="140" Margin="10,0,0,0" MinHeight="30"
+                                  VerticalAlignment="Center"
+                                  ItemsSource="{Binding RegionOptions}"
+                                  SelectedItem="{Binding RegionFilter}"
+                                  ToolTip="Filter by region" />
+
+                        <TextBlock Grid.Column="4" Text="{Binding AccountCountText}"
+                                   Style="{StaticResource ChromeMono}"
+                                   Margin="14,0,0,0" HorizontalAlignment="Left" />
+
+                        <Button Grid.Column="5" Content="+ ADD ACCOUNT" Style="{StaticResource PrimaryButton}"
+                                Click="OnAddAccount" MinHeight="32" />
+                    </Grid>
+                </Border>
+
+                <!-- Content. Padding sits on the inner element, never the scroll container: the
+                     registration marks are drawn outside their frames, and padding on the scroller
+                     turns them into phantom scrollbars. -->
+                <Grid>
+                    <!-- ACCOUNTS -->
+                    <ScrollViewer x:Name="AccountsPane" VerticalScrollBarVisibility="Auto">
+                        <Grid Margin="22">
+                            <!-- The tile is part of the same panel so it flows as the final cell,
+                                 which is what stops one account sitting alone in an empty row. -->
+                            <ItemsControl ItemsSource="{Binding GridItems}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <UniformGrid Columns="3" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+
+                                <!--
+                                    Both cell templates are implicit and selected by data type.
+
+                                    Do NOT reintroduce an explicit ItemsControl.ItemTemplate here: WPF copies
+                                    it onto every container's ContentTemplate, and ContentPresenter only falls
+                                    through to a DataType lookup when ContentTemplate is null. An explicit
+                                    template therefore paints the add tile with the account-card template, and
+                                    because a failed binding yields UnsetValue, every Visibility converter
+                                    reverts to Visible — producing a blank card wearing a blinking LIVE badge.
+                                -->
+                                <ItemsControl.Resources>
+                                    <!-- The last cell: dashed, and it turns accent on hover. -->
+                                    <DataTemplate DataType="{x:Type vm:AddAccountTile}">
+                                        <Border x:Name="Tile" Style="{StaticResource DashedTile}"
+                                                MinHeight="180" Margin="0,0,20,20" Cursor="Hand"
+                                                MouseLeftButtonUp="OnAddAccountTile"
+                                                Focusable="True" KeyboardNavigation.IsTabStop="True"
+                                                KeyDown="OnTileKey"
+                                                FocusVisualStyle="{StaticResource AccentFocusVisual}"
+                                                AutomationProperties.Name="Add account">
+                                            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                                                <TextBlock x:Name="Plus" Text="+" FontSize="22"
+                                                           FontFamily="{StaticResource HeadingFont}"
+                                                           FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource MutedText}"
+                                                           HorizontalAlignment="Center" />
+                                                <TextBlock x:Name="Label" Text="ADD ACCOUNT" Margin="0,7,0,0"
+                                                           FontFamily="{StaticResource HeadingFont}"
+                                                           FontWeight="SemiBold" FontSize="13.5"
+                                                           Foreground="{DynamicResource MutedText}"
+                                                           HorizontalAlignment="Center" />
+                                                <TextBlock Text="or pull the one that's logged in"
+                                                           Style="{StaticResource Mono}" Margin="0,7,0,0"
+                                                           HorizontalAlignment="Center" />
                                             </StackPanel>
+                                        </Border>
 
-                                            <Button Grid.Column="2" Content="⋯" Padding="8,0" FontSize="15"
-                                                    VerticalAlignment="Top" Click="OnCardMenu" Tag="{Binding}"
-                                                    ToolTip="Edit, recovery sheet, remove" />
-                                        </Grid>
+                                        <DataTemplate.Triggers>
+                                            <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource Self}}"
+                                                         Value="True">
+                                                <Setter TargetName="Tile" Property="BorderBrush"
+                                                        Value="{DynamicResource AccentSolid}" />
+                                                <Setter TargetName="Plus" Property="Foreground"
+                                                        Value="{DynamicResource Accent}" />
+                                                <Setter TargetName="Label" Property="Foreground"
+                                                        Value="{DynamicResource Accent}" />
+                                            </DataTrigger>
+                                        </DataTemplate.Triggers>
+                                    </DataTemplate>
 
-                                        <TextBlock Text="{Binding FlexRankText}" Style="{StaticResource Muted}"
-                                                   FontSize="11" Margin="64,3,0,0"
-                                                   Visibility="{Binding HasFlexRank, Converter={StaticResource BoolToVis}}" />
+                                    <!-- Implicit, keyed by type, NOT an ItemTemplate. See above. -->
+                                    <DataTemplate DataType="{x:Type vm:AccountTile}">
 
-                                        <Separator Margin="0,12,0,10" Background="{StaticResource BorderBrushSoft}" />
+                                        <!-- The spec plate. 20px grid gap, and the 6px margin the
+                                             registration marks need to sit outside the frame. -->
+                                        <Grid Margin="0,0,20,20">
+                                            <!-- Transparent on purpose: a card is a line drawing, and a
+                                                 surface fill is the one change that makes the whole
+                                                 grid read as a stack of web panels instead. -->
+                                            <!-- 2px accent down the left edge marks the live account; it reads
+                                                 before any text does. -->
+                                            <!-- Gold, not accent: the live edge is one of the only two
+                                                 places the interface spends its warm colour. -->
+                                            <Border x:Name="LiveBar" Width="2" HorizontalAlignment="Left"
+                                                    Background="{DynamicResource Gold}"
+                                                    Panel.ZIndex="2"
+                                                    Visibility="{Binding IsSignedIn, Converter={StaticResource BoolToVis}}" />
 
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="Auto" />
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="Auto" />
-                                            </Grid.ColumnDefinitions>
-                                            <TextBlock Grid.Column="0" Text="{Binding LevelText}" Style="{StaticResource Muted}" />
-                                            <TextBlock Grid.Column="1" Text="{Binding RegionText}" Style="{StaticResource Muted}"
-                                                       Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
-                                            <TextBlock Grid.Column="2" Text="{Binding LastUsedText}" Style="{StaticResource Muted}" />
-                                        </Grid>
+                                            <!-- The 3px tier band across the very top of the card. With
+                                                 the rank text and the LP fill, this is the third of the
+                                                 three places an account's tier colour lands. -->
+                                            <Border Height="3" VerticalAlignment="Top" Panel.ZIndex="1"
+                                                    Background="{Binding TierKey, Converter={StaticResource TierBrush}}" />
 
-                                        <!-- Wallet and collection, read from the client. Dated on the
-                                             next line because it is a snapshot from the last sign-in
-                                             rather than a live reading. -->
-                                        <StackPanel Margin="0,8,0,0"
-                                                    Visibility="{Binding HasStats, Converter={StaticResource BoolToVis}}">
-                                            <TextBlock Text="{Binding StatsLine}" Style="{StaticResource Muted}"
-                                                       FontSize="11" TextTrimming="CharacterEllipsis" />
-                                            <TextBlock Text="{Binding StatsAsOfText}" Foreground="#FF6B7280"
-                                                       FontSize="10" Margin="0,2,0,0" />
-                                        </StackPanel>
+                                            <Border x:Name="Plate" Background="Transparent"
+                                                    BorderBrush="{DynamicResource Divider}" BorderThickness="1"
+                                                    MouseLeftButtonUp="OnCardClicked" Cursor="Hand"
+                                                    Focusable="True" KeyboardNavigation.IsTabStop="True"
+                                                    KeyDown="OnCardKey"
+                                                    FocusVisualStyle="{StaticResource AccentFocusVisual}"
+                                                    AutomationProperties.Name="{Binding Title}">
+                                                <StackPanel>
 
-                                        <ItemsControl ItemsSource="{Binding Tags}" Margin="0,9,0,0"
-                                                      Visibility="{Binding HasTags, Converter={StaticResource BoolToVis}}">
-                                            <ItemsControl.ItemsPanel>
-                                                <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
-                                            </ItemsControl.ItemsPanel>
-                                            <ItemsControl.ItemTemplate>
-                                                <DataTemplate>
-                                                    <Border Style="{StaticResource Chip}">
-                                                        <TextBlock Text="{Binding}" FontSize="11" />
+                                                    <!-- part rail -->
+                                                    <Border Background="{DynamicResource PartRailFill}"
+                                                            BorderBrush="{DynamicResource Divider}"
+                                                            BorderThickness="0,0,0,1" Padding="11,6">
+                                                        <Grid>
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="Auto" />
+                                                                <ColumnDefinition Width="*" />
+                                                                <ColumnDefinition Width="Auto" />
+                                                                <ColumnDefinition Width="Auto" />
+                                                            </Grid.ColumnDefinitions>
+
+                                                            <!-- Its own column: it shared column 2 with the
+                                                                 region text and drew straight over it. -->
+                                                            <Button Grid.Column="3" Content="&#x22ef;" Margin="7,0,0,0"
+                                                                    Click="OnCardMenu" Tag="{Binding}"
+                                                                    Width="20" Height="18" Padding="0" FontSize="13"
+                                                                    VerticalAlignment="Center"
+                                                                    ToolTip="Pin, copy password, edit, trash" />
+
+                                                            <StackPanel Grid.Column="0" Orientation="Horizontal">
+                                                                <TextBlock Text="{Binding PartCode}"
+                                                                           Style="{StaticResource Mono}"
+                                                                           Foreground="{DynamicResource Accent}"
+                                                                           VerticalAlignment="Center" />
+
+                                                                <!-- Gold appears in exactly two places in the whole
+                                                                     interface: here, and the LP figure. -->
+                                                                <Border Background="{DynamicResource Gold}"
+                                                                        Padding="5,1" Margin="9,0,0,0"
+                                                                        VerticalAlignment="Center"
+                                                                        Visibility="{Binding IsSignedIn, Converter={StaticResource BoolToVis}}">
+                                                                    <StackPanel Orientation="Horizontal">
+                                                                        <Border Width="5" Height="5"
+                                                                                Background="{DynamicResource OnGold}"
+                                                                                VerticalAlignment="Center">
+                                                                            <Border.Triggers>
+                                                                                <EventTrigger RoutedEvent="Loaded">
+                                                                                    <BeginStoryboard Storyboard="{StaticResource RamBlink}" />
+                                                                                </EventTrigger>
+                                                                            </Border.Triggers>
+                                                                        </Border>
+                                                                        <TextBlock Text="LIVE" Margin="5,0,0,0"
+                                                                                   FontFamily="{StaticResource MonoFont}"
+                                                                                   FontSize="11"
+                                                                                   Foreground="{DynamicResource OnGold}" />
+                                                                    </StackPanel>
+                                                                </Border>
+                                                            </StackPanel>
+                                                            <Border Grid.Column="1" Height="1" Margin="8,0"
+                                                                    Background="{DynamicResource RuleLight}"
+                                                                    VerticalAlignment="Center" />
+                                                            <TextBlock Grid.Column="2" Text="{Binding RailRight}"
+                                                                       Style="{StaticResource Mono}"
+                                                                       VerticalAlignment="Center" />
+                                                        </Grid>
                                                     </Border>
-                                                </DataTemplate>
-                                            </ItemsControl.ItemTemplate>
-                                        </ItemsControl>
 
-                                        <!-- Sign-in is a deliberate press, not a side effect of
-                                             clicking the card: it closes the Riot Client and League,
-                                             so a stray click on the wrong card kills a running one. -->
-                                        <Button Content="Sign in" Style="{StaticResource PrimaryButton}"
-                                                Margin="0,12,0,0" HorizontalAlignment="Stretch"
-                                                Click="OnSignInClicked" Tag="{Binding}"
-                                                IsEnabled="{Binding CanSignIn}"
-                                                ToolTip="{Binding SignInTooltip}" />
+                                                    <!-- rank plate -->
+                                                    <Border Background="{DynamicResource RaisedSurface}"
+                                                            BorderBrush="{DynamicResource Divider}"
+                                                            BorderThickness="0,0,0,1" Padding="12,13">
+                                                        <Grid>
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="Auto" />
+                                                                <ColumnDefinition Width="*" />
+                                                            </Grid.ColumnDefinitions>
 
-                                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                                            <Border CornerRadius="4" Padding="7,3"
-                                                    Background="{Binding IsInstant, Converter={StaticResource ModeBackground}}">
-                                                <TextBlock Text="{Binding SignInModeText}" FontSize="11"
-                                                           Foreground="{Binding IsInstant, Converter={StaticResource ModeForeground}}" />
+                                                            <!-- icon frame: swallows its own clicks so
+                                                                 filling an icon is not a sign-in -->
+                                                            <Grid Grid.Column="0" Width="64" Height="64"
+                                                                  VerticalAlignment="Top"
+                                                                  Margin="0,0,13,0" Background="Transparent"
+                                                                  MouseLeftButtonUp="OnIconClicked">
+                                                                <!-- fill-dim, NOT RaisedSurface: the rank plate
+                                                                     behind this frame is RaisedSurface too, so the
+                                                                     largest block on the card was an outline over
+                                                                     identical fill and read as nothing at all. -->
+                                                                <Border BorderBrush="{DynamicResource ShellBorder}"
+                                                                        BorderThickness="1"
+                                                                        Background="{DynamicResource InactiveFill}">
+                                                                    <Grid>
+                                                                        <TextBlock Text="{Binding Initials}"
+                                                                                   FontFamily="{StaticResource MonoFont}"
+                                                                                   FontSize="11"
+                                                                                   Foreground="{DynamicResource MutedText}"
+                                                                                   HorizontalAlignment="Center"
+                                                                                   VerticalAlignment="Center"
+                                                                                   Visibility="{Binding ShowInitials, Converter={StaticResource BoolToVis}}" />
+                                                                        <Rectangle Fill="{Binding IconBrush}"
+                                                                                   Visibility="{Binding HasIcon, Converter={StaticResource BoolToVis}}" />
+                                                                    </Grid>
+                                                                </Border>
+</Grid>
+
+                                                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                                <!-- Two cells, not a horizontal stack: the
+                                                                     rank sits hard left and the LP group hard
+                                                                     right against the plate edge, so a column
+                                                                     of cards scans as a column of figures. -->
+                                                                <Grid>
+                                                                    <Grid.ColumnDefinitions>
+                                                                        <ColumnDefinition Width="*" />
+                                                                        <ColumnDefinition Width="Auto" />
+                                                                    </Grid.ColumnDefinitions>
+
+                                                                    <TextBlock Grid.Column="0" Text="{Binding RankName}"
+                                                                               FontFamily="{StaticResource HeadingFont}"
+                                                                               FontWeight="SemiBold" FontSize="26"
+                                                                               Foreground="{Binding TierKey, Converter={StaticResource TierBrush}}" />
+                                                                    <StackPanel Grid.Column="1" Orientation="Horizontal"
+                                                                                VerticalAlignment="Bottom"
+                                                                                Visibility="{Binding HasLp, Converter={StaticResource BoolToVis}}">
+                                                                        <TextBlock Text="{Binding LpValue}"
+                                                                                   FontFamily="{StaticResource HeadingFont}"
+                                                                                   FontWeight="SemiBold" FontSize="19"
+                                                                                   Foreground="{DynamicResource Gold}" />
+                                                                        <TextBlock Text="lp" Style="{StaticResource Mono}"
+                                                                                   Margin="3,0,0,3" VerticalAlignment="Bottom" />
+                                                                    </StackPanel>
+                                                                </Grid>
+
+                                                                <TextBlock Text="{Binding FlexLine}" Style="{StaticResource Mono}"
+                                                                           Margin="0,4,0,0"
+                                                                           Visibility="{Binding HasFlexLine, Converter={StaticResource BoolToVis}}" />
+
+                                                                <ItemsControl ItemsSource="{Binding LpCells}" Margin="0,7,0,0"
+                                                                              Visibility="{Binding HasLp, Converter={StaticResource BoolToVis}}"
+                                                                              ItemTemplate="{StaticResource LpCell}">
+                                                                    <ItemsControl.ItemsPanel>
+                                                                        <ItemsPanelTemplate>
+                                                                            <!-- UniformGrid, not a horizontal
+                                                                                 StackPanel: a StackPanel gives its
+                                                                                 children infinite width, so the
+                                                                                 cells' Stretch did nothing and the
+                                                                                 whole bar measured zero and
+                                                                                 disappeared. -->
+                                                                            <UniformGrid Rows="1" />
+                                                                        </ItemsPanelTemplate>
+                                                                    </ItemsControl.ItemsPanel>
+                                                                </ItemsControl>
+
+                                                                <!-- 9px clear of the LP rule, per the design,
+                                                                     with the tally hard right. -->
+                                                                <Grid Margin="0,9,0,0"
+                                                                      Visibility="{Binding HasForm, Converter={StaticResource BoolToVis}}">
+                                                                    <Grid.ColumnDefinitions>
+                                                                        <ColumnDefinition Width="*" />
+                                                                        <ColumnDefinition Width="Auto" />
+                                                                    </Grid.ColumnDefinitions>
+
+                                                                    <ItemsControl Grid.Column="0" ItemsSource="{Binding FormBars}"
+                                                                                  ItemTemplate="{StaticResource FormBar}"
+                                                                                  VerticalAlignment="Bottom"
+                                                                                  Visibility="{Binding HasFormBars, Converter={StaticResource BoolToVis}}">
+                                                                        <ItemsControl.ItemsPanel>
+                                                                            <ItemsPanelTemplate>
+                                                                                <StackPanel Orientation="Horizontal" />
+                                                                            </ItemsPanelTemplate>
+                                                                        </ItemsControl.ItemsPanel>
+                                                                    </ItemsControl>
+
+                                                                    <TextBlock Grid.Column="1" Text="{Binding FormText}"
+                                                                               Style="{StaticResource Mono}"
+                                                                               VerticalAlignment="Bottom" Margin="9,0,0,0" />
+                                                                </Grid>
+                                                            </StackPanel>
+                                                        </Grid>
+                                                    </Border>
+
+                                                    <!-- identity -->
+                                                    <StackPanel Margin="12,11,12,0">
+                                                        <StackPanel Orientation="Horizontal">
+                                                            <!-- Parchment, not ink: the name is the one
+                                                                 thing that has to separate from both the
+                                                                 blue chrome and the coloured rank. -->
+                                                            <TextBlock Text="{Binding Title}"
+                                                                       FontFamily="{StaticResource HeadingFont}"
+                                                                       FontWeight="SemiBold" FontSize="20"
+                                                                       Foreground="{DynamicResource Name}"
+                                                                       TextTrimming="CharacterEllipsis" />
+                                                            <TextBlock Text="{Binding TagLineText}" FontSize="13"
+                                                                       FontFamily="{StaticResource BodyFont}"
+                                                                       Foreground="{DynamicResource SubtleText}"
+                                                                       Margin="5,4,0,0"
+                                                                       Visibility="{Binding HasTagLine, Converter={StaticResource BoolToVis}}" />
+                                                        </StackPanel>
+                                                        <TextBlock Text="{Binding IdentityMeta}" Style="{StaticResource Mono}"
+                                                                   Margin="0,3,0,0" TextTrimming="CharacterEllipsis" />
+                                                    </StackPanel>
+
+                                                                                                        <!-- stats: 3 rows x 2 columns. Values are heavier than their labels so the
+                                                         number reads before the word. -->
+                                                    <Border Margin="12,11,12,0" BorderBrush="{DynamicResource RuleLight}"
+                                                            BorderThickness="0,1,0,0" Padding="0,9,0,0">
+                                                        <Grid>
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="*" />
+                                                                <ColumnDefinition Width="*" />
+                                                            </Grid.ColumnDefinitions>
+                                                            <Grid.RowDefinitions>
+                                                                <RowDefinition Height="Auto" />
+                                                                <RowDefinition Height="Auto" />
+                                                                <RowDefinition Height="Auto" />
+                                                            </Grid.RowDefinitions>
+                                                        <DockPanel Grid.Row="0" Grid.Column="0" Margin="0,0,9,6">
+                                                            <TextBlock DockPanel.Dock="Right" Text="{Binding ChampsSkinsValue}"
+                                                                               Style="{StaticResource StatValue}" Margin="6,0,0,0" />
+                                                                    <TextBlock Text="CHAMPS/SKINS" Style="{StaticResource Mono}"
+                                                                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                                        </DockPanel>
+                                                        <DockPanel Grid.Row="0" Grid.Column="1" Margin="0,0,0,6">
+                                                            <TextBlock DockPanel.Dock="Right" Text="{Binding EssenceValue}"
+                                                                               Style="{StaticResource StatValue}" Margin="6,0,0,0" />
+                                                                    <TextBlock Text="BE" Style="{StaticResource Mono}"
+                                                                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                                        </DockPanel>
+                                                        <DockPanel Grid.Row="1" Grid.Column="0" Margin="0,0,9,6">
+                                                            <TextBlock DockPanel.Dock="Right" Text="{Binding RiotPointsValue}"
+                                                                               Style="{StaticResource StatValue}" Margin="6,0,0,0" />
+                                                                    <TextBlock Text="RP" Style="{StaticResource Mono}"
+                                                                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                                        </DockPanel>
+                                                        <DockPanel Grid.Row="1" Grid.Column="1" Margin="0,0,0,6">
+                                                            <TextBlock DockPanel.Dock="Right" Text="{Binding LootValue}"
+                                                                               Style="{StaticResource StatValue}" Margin="6,0,0,0" />
+                                                                    <TextBlock Text="LOOT" Style="{StaticResource Mono}"
+                                                                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                                        </DockPanel>
+                                                        <DockPanel Grid.Row="2" Grid.Column="0" Margin="0,0,14,0">
+                                                            <TextBlock DockPanel.Dock="Right" Text="{Binding HonorValue}"
+                                                                               Style="{StaticResource StatValue}" Margin="6,0,0,0" />
+                                                                    <TextBlock Text="HONOR" Style="{StaticResource Mono}"
+                                                                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                                        </DockPanel>
+                                                        <DockPanel Grid.Row="2" Grid.Column="1" Margin="0,0,0,0">
+                                                            <TextBlock DockPanel.Dock="Right" Text="{Binding SyncedValue}"
+                                                                               Style="{StaticResource StatValue}" Margin="6,0,0,0" />
+                                                                    <TextBlock Text="SYNCED" Style="{StaticResource Mono}"
+                                                                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                                        </DockPanel>
+                                                        </Grid>
+                                                    </Border>
+
+                                                    <!-- email row, with the sign-in mode badge on the right -->
+                                                    <Grid Margin="12,11,12,0">
+                                                        <TextBlock Text="{Binding EmailLine}" Style="{StaticResource Mono}"
+                                                                   VerticalAlignment="Center" Margin="0,0,80,0"
+                                                                   TextTrimming="CharacterEllipsis" />
+                                                        <!-- Ok, not Accent: "stored credentials are enough to
+                                                             sign straight in" is the same class of readiness
+                                                             signal as the client-detected dot, and it stops the
+                                                             part code, this badge, the footer label and its arrow
+                                                             from all being one blue. -->
+                                                        <Border Style="{StaticResource Badge}" HorizontalAlignment="Right"
+                                                                BorderBrush="{DynamicResource Ok}"
+                                                                Visibility="{Binding IsInstant, Converter={StaticResource BoolToVis}}">
+                                                            <TextBlock Text="INSTANT" Style="{StaticResource BadgeText}"
+                                                                       Foreground="{DynamicResource Ok}" />
+                                                        </Border>
+                                                    </Grid>
+
+                                                                                                        <!--
+                                                        A solid plate with a 9px hatched edge bar.
+                                                    
+                                                        The hatch is confined to the bar because the earlier draft set mono
+                                                        caps across the whole stripe field and it could not be read.
+                                                    -->
+                                                    <Border Style="{StaticResource WarningPlate}" Margin="12,11,12,0"
+                                                            Visibility="{Binding HasHazard, Converter={StaticResource BoolToVis}}">
+                                                        <DockPanel>
+                                                            <!-- Solid, not the hatch. The spec is a solid
+                                                                 edge bar, and the comment above this plate
+                                                                 has always claimed it was one. -->
+                                                            <Border DockPanel.Dock="Left" Width="9"
+                                                                    Background="{DynamicResource WarnFg}" />
+
+                                                            <!-- Dismiss. Hides the badge on this card only;
+                                                                 the warning still appears in the account's
+                                                                 details and still counts towards vault
+                                                                 health, because this is "stop nagging me"
+                                                                 and not "make it not true". -->
+                                                            <Button DockPanel.Dock="Right" Content="&#x2715;"
+                                                                    Click="OnDismissWarning" Tag="{Binding}"
+                                                                    Width="20" Height="18" Padding="0"
+                                                                    FontSize="10" Margin="6,0,7,0"
+                                                                    VerticalAlignment="Center"
+                                                                    Background="Transparent" BorderThickness="0"
+                                                                    Foreground="{DynamicResource WarnFg}"
+                                                                    ToolTip="Stop showing this on the card" />
+                                                            <!-- DockPanel, not StackPanel: a horizontal StackPanel
+                                                                 hands its children infinite width, so the text never
+                                                                 wrapped and was simply cut off mid-word. -->
+                                                            <DockPanel Margin="9,7">
+                                                                <Path DockPanel.Dock="Left"
+                                                                      Data="M 4.5,0 L 9,9 L 0,9 Z"
+                                                                      Fill="{DynamicResource WarnFg}"
+                                                                      VerticalAlignment="Top" Margin="0,3,8,0" />
+                                                                <TextBlock Text="{Binding HazardText}"
+                                                                           Style="{StaticResource WarningText}" />
+                                                            </DockPanel>
+                                                        </DockPanel>
+                                                    </Border>
+
+                                                    <ItemsControl ItemsSource="{Binding Tags}" Margin="12,10,12,0"
+                                                                  Visibility="{Binding HasTags, Converter={StaticResource BoolToVis}}">
+                                                        <ItemsControl.ItemsPanel>
+                                                            <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                                                        </ItemsControl.ItemsPanel>
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate>
+                                                                <Border Style="{StaticResource Chip}" Margin="0,0,4,4">
+                                                                    <TextBlock Text="{Binding}" Style="{StaticResource ChipText}" />
+                                                                </Border>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+
+                                                    <!-- footer: sign-in is a deliberate press -->
+                                                    <Border Margin="0,11,0,0" BorderBrush="{DynamicResource RuleLight}"
+                                                            BorderThickness="0,1,0,0" Padding="12,9">
+                                                        <Grid>
+                                                            <Button Content="{Binding FooterAction}" HorizontalAlignment="Left"
+                                                                    Click="OnSignInClicked" Tag="{Binding}"
+                                                                    IsEnabled="{Binding CanSignIn}"
+                                                                    ToolTip="{Binding SignInTooltip}"
+                                                                    MinHeight="26" Padding="0" FontSize="12.5"
+                                                                    FontFamily="{StaticResource HeadingFont}"
+                                                                    FontWeight="SemiBold"
+                                                                    Background="Transparent" BorderThickness="0"
+                                                                    Foreground="{DynamicResource Accent}" />
+
+                                                            <!-- The arrow is the affordance, hard right. It is
+                                                                 part of the same press, so it is not hit-testable
+                                                                 on its own. -->
+                                                            <TextBlock Text="&#x2192;" HorizontalAlignment="Right"
+                                                                       VerticalAlignment="Center" FontSize="14"
+                                                                       IsHitTestVisible="False"
+                                                                       Foreground="{DynamicResource Accent}" />
+                                                        </Grid>
+                                                    </Border>
+                                                </StackPanel>
                                             </Border>
+                                        </Grid>
 
-                                            <!-- With a dozen smurfs, "which one am I on?" is the first
-                                                 question every time, and only the client knows. -->
-                                            <Border CornerRadius="4" Padding="7,3" Margin="6,0,0,0"
-                                                    Background="#334C8DFF"
-                                                    Visibility="{Binding IsSignedIn, Converter={StaticResource BoolToVis}}">
-                                                <TextBlock Text="Signed in now" FontSize="11"
-                                                           Foreground="{StaticResource Accent}" />
-                                            </Border>
-                                        </StackPanel>
+                                        <DataTemplate.Triggers>
+                                            <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource Self}}"
+                                                         Value="True">
+                                                <Setter TargetName="Plate" Property="BorderBrush"
+                                                        Value="{DynamicResource Accent}" />
+                                                <Setter TargetName="Plate" Property="Background"
+                                                        Value="{DynamicResource CardHover}" />
+                                            </DataTrigger>
+                                        </DataTemplate.Triggers>
+                                    </DataTemplate>
+                                </ItemsControl.Resources>
+                            </ItemsControl>
 
-                                        <TextBlock Text="{Binding RecoveryWarning}" Foreground="{StaticResource Warning}"
-                                                   FontSize="11" Margin="0,8,0,0" TextWrapping="Wrap"
-                                                   Visibility="{Binding HasRecoveryWarning, Converter={StaticResource BoolToVis}}" />
-                                    </StackPanel>
-                                </Border>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </ScrollViewer>
+                            <TextBlock x:Name="EmptyHint" Style="{StaticResource Muted}" FontSize="14"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       TextAlignment="Center" TextWrapping="Wrap" MaxWidth="420"
+                                       Visibility="Collapsed" />
+                        </Grid>
+                    </ScrollViewer>
 
-                <!-- Shown when the vault is empty or the search matched nothing -->
-                <TextBlock x:Name="EmptyHint" Style="{StaticResource Muted}" FontSize="14"
-                           HorizontalAlignment="Center" VerticalAlignment="Center"
-                           TextAlignment="Center" TextWrapping="Wrap" MaxWidth="420"
-                           Visibility="Collapsed" />
-            </Grid>
-        </DockPanel>
+                    <!-- FLEET / LOOT / SETTINGS -->
+                    <ContentControl x:Name="PaneHost" Visibility="Collapsed" />
+                </Grid>
+            </DockPanel>
 
-        <!-- ============ LOCKED ============ -->
-        <Grid Visibility="{Binding IsLocked, Converter={StaticResource BoolToVis}}"
-              Background="{StaticResource Background}">
-            <Border Background="{StaticResource Surface}" BorderBrush="{StaticResource BorderBrushSoft}"
-                    BorderThickness="1" CornerRadius="10" Padding="34"
-                    HorizontalAlignment="Center" VerticalAlignment="Center" Width="420">
-                <StackPanel>
-                    <TextBlock x:Name="LockTitle" Text="Unlock your accounts" Style="{StaticResource Heading}"
-                               HorizontalAlignment="Center" />
-                    <TextBlock x:Name="LockSubtitle" Style="{StaticResource Muted}" TextWrapping="Wrap"
-                               HorizontalAlignment="Center" TextAlignment="Center" Margin="0,8,0,20" />
+            <!--
+                Toast. Bottom-left of the content area, clearing the 26px status bar.
 
-                    <Label Content="Master password" />
-                    <PasswordBox x:Name="MasterPasswordBox" KeyDown="OnMasterPasswordKeyDown" />
-
-                    <StackPanel x:Name="ConfirmPanel" Visibility="Collapsed" Margin="0,12,0,0">
-                        <Label Content="Confirm master password" />
-                        <PasswordBox x:Name="ConfirmPasswordBox" KeyDown="OnMasterPasswordKeyDown" />
-                        <TextBlock Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,10,0,0"
-                                   Text="There is no way to reset this. If you forget it, the accounts inside are gone — so pick something you will still know in a year, and consider writing it down somewhere physical." />
-                    </StackPanel>
-
-                    <TextBlock x:Name="LockError" Foreground="{StaticResource Danger}" TextWrapping="Wrap"
-                               Margin="0,12,0,0" Visibility="Collapsed" />
-
-                    <Button x:Name="UnlockButton" Content="Unlock" Style="{StaticResource PrimaryButton}"
-                            Margin="0,18,0,0" Click="OnUnlock" />
-
-                    <Button x:Name="HelloButton" Content="Use Windows Hello" Margin="0,8,0,0"
-                            Click="OnUnlockWithHello" Visibility="Collapsed" />
+                Deliberately the last child of the root Grid, so it paints above the lock screen, the
+                busy overlay and any future dialog. The prototype layers its toast underneath those,
+                which hides the one message most worth seeing.
+            -->
+            <Border x:Name="Toast" Panel.ZIndex="99" Effect="{DynamicResource Elevated}"
+                    HorizontalAlignment="Left" VerticalAlignment="Bottom"
+                    Margin="22,0,0,38" Padding="14,9"
+                    Background="{DynamicResource PlateBg}"
+                    Visibility="Collapsed"
+                    RenderTransformOrigin="0.5,0.5">
+                <Border.RenderTransform>
+                    <TranslateTransform />
+                </Border.RenderTransform>
+                <StackPanel Orientation="Horizontal">
+                    <Border Width="6" Height="6" Background="{DynamicResource ToastDot}"
+                            VerticalAlignment="Center" Margin="0,0,9,0" />
+                    <TextBlock x:Name="ToastText" FontFamily="{StaticResource MonoFont}" FontSize="11"
+                               Foreground="{DynamicResource OnPlate}" VerticalAlignment="Center" />
                 </StackPanel>
             </Border>
-        </Grid>
 
-        <!-- ============ BUSY OVERLAY ============ -->
-        <Grid Background="#DD0D0F13" Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}">
-            <Border Background="{StaticResource Surface}" BorderBrush="{StaticResource BorderBrushSoft}"
-                    BorderThickness="1" CornerRadius="10" Padding="32"
-                    HorizontalAlignment="Center" VerticalAlignment="Center" Width="460">
-                <StackPanel>
-                    <TextBlock Text="{Binding BusyMessage}" Style="{StaticResource Heading}"
-                               HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" />
+            <!-- ============================ VAULT LOCK ============================ -->
+            <Grid Visibility="{Binding IsLocked, Converter={StaticResource BoolToVis}}">
+                <!-- A radial vignette, not a pattern: the raised step at the centre falling to the
+                     window ground by 78%. It lifts the panel without putting texture behind it. -->
+                <Grid.Background>
+                    <RadialGradientBrush GradientOrigin="0.5,0.38" Center="0.5,0.38"
+                                         RadiusX="0.6" RadiusY="0.55">
+                        <GradientStop Color="{DynamicResource RaisedSurfaceColor}" Offset="0" />
+                        <GradientStop Color="{DynamicResource GroundColor}" Offset="0.78" />
+                    </RadialGradientBrush>
+                </Grid.Background>
 
-                    <ProgressBar IsIndeterminate="True" Height="4" Margin="0,18"
-                                 Background="{StaticResource Background}" Foreground="{StaticResource Accent}"
-                                 BorderThickness="0" />
+                <Grid Width="392" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Border Background="{DynamicResource Ground}" BorderBrush="{DynamicResource Divider}"
+                            BorderThickness="1" Padding="32,34">
+                        <StackPanel>
+                            <Image Source="pack://application:,,,/Assets/hextech-512.png"
+                                   Width="44" Height="44" HorizontalAlignment="Center"
+                                   RenderOptions.BitmapScalingMode="HighQuality" />
 
-                    <TextBlock Text="{Binding BusyDetail}" Style="{StaticResource Muted}"
-                               HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap"
-                               Visibility="{Binding HasBusyDetail, Converter={StaticResource BoolToVis}}" />
+                            <TextBlock x:Name="LockTitle" Text="VAULT LOCKED" Margin="0,18,0,0"
+                                       FontFamily="{StaticResource HeadingFont}" FontWeight="SemiBold"
+                                       FontSize="26" HorizontalAlignment="Center" />
 
-                    <!-- Only while keystrokes are actually being sent. During an instant sign-in
-                         there is nothing to interfere with, and a warning shown every time is a
-                         warning you stop reading. -->
-                    <Border Background="#33E0A73C" CornerRadius="6" Padding="12" Margin="0,16,0,0"
-                            Visibility="{Binding BusyIsTyping, Converter={StaticResource BoolToVis}}">
-                        <TextBlock Foreground="{StaticResource Warning}" TextWrapping="Wrap" TextAlignment="Center"
-                                   Text="Typing your password — please don't touch the mouse or keyboard. If focus moves, typing stops automatically and nothing more is sent." />
+                            <TextBlock x:Name="LockSubtitle" Style="{StaticResource Body}" Margin="0,18,0,0"
+                                       Foreground="{DynamicResource MutedText}" MaxWidth="250"
+                                       TextAlignment="Center" TextWrapping="Wrap"
+                                       HorizontalAlignment="Center" />
+
+                            <StackPanel Margin="0,18,0,0">
+                                <TextBlock Text="master password" FontSize="12"
+                                           Foreground="{DynamicResource SubtleText}" Margin="0,0,0,6" />
+                                <PasswordBox x:Name="MasterPasswordBox" KeyDown="OnMasterPasswordKeyDown" />
+                            </StackPanel>
+
+                            <StackPanel x:Name="ConfirmPanel" Margin="0,10,0,0">
+                                <TextBlock Text="confirm" FontSize="12"
+                                           Foreground="{DynamicResource SubtleText}" Margin="0,0,0,6" />
+                                <PasswordBox x:Name="ConfirmPasswordBox" KeyDown="OnMasterPasswordKeyDown" />
+                            </StackPanel>
+
+                            <!-- A failed unlock is a warning, not body copy. The plate and the amber
+                                 edge bar are the same pattern the account cards use. -->
+                            <Border x:Name="LockErrorPlate" Style="{StaticResource WarningPlate}"
+                                    Margin="0,12,0,0" Visibility="Collapsed">
+                                <DockPanel>
+                                    <Border DockPanel.Dock="Left" Width="9"
+                                            Background="{DynamicResource WarnFg}" />
+                                    <TextBlock x:Name="LockError" Style="{StaticResource WarningText}"
+                                               Margin="10,7" />
+                                </DockPanel>
+                            </Border>
+
+                            <Button x:Name="UnlockButton" Content="UNLOCK THE VAULT"
+                                    Style="{StaticResource PrimaryButton}" Margin="0,18,0,0"
+                                    MinHeight="40" Click="OnUnlock" />
+
+                            <!-- Visibility tracks the Hello button: without it, this drew
+                                 an OR rule over nothing at all. -->
+                            <Grid x:Name="HelloDivider" Margin="0,18,0,0" Visibility="Collapsed">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Border Grid.Column="0" Height="1" Background="{DynamicResource RuleLight}"
+                                        VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="1" Text="OR" Style="{StaticResource Mono}" Margin="10,0" />
+                                <Border Grid.Column="2" Height="1" Background="{DynamicResource RuleLight}"
+                                        VerticalAlignment="Center" />
+                            </Grid>
+
+                            <Button x:Name="HelloButton" Margin="0,18,0,0" MinHeight="36"
+                                    Click="OnUnlockWithHello" Visibility="Collapsed">
+                                <StackPanel Orientation="Horizontal">
+                                    <Ellipse Width="13" Height="13" Fill="Transparent"
+                                             Stroke="{DynamicResource AccentSolid}" StrokeThickness="1"
+                                             VerticalAlignment="Center" Margin="0,0,8,0" />
+                                    <TextBlock Text="WINDOWS HELLO" FontFamily="{StaticResource HeadingFont}"
+                                               FontWeight="SemiBold" FontSize="13.5" />
+                                </StackPanel>
+                            </Button>
+
+                            <TextBlock x:Name="LockFooter"
+                                       Style="{StaticResource Mono}" Margin="0,18,0,0"
+                                       TextWrapping="Wrap" TextAlignment="Center" />
+                        </StackPanel>
                     </Border>
 
-                    <Button Content="Cancel" Margin="0,18,0,0" Click="OnCancelLogin"
-                            HorizontalAlignment="Center" />
-                </StackPanel>
-            </Border>
-        </Grid>
+                    <Path Style="{StaticResource RegistrationMark}" HorizontalAlignment="Left"
+                          VerticalAlignment="Top" Margin="-6,-6,0,0" />
+                    <Path Style="{StaticResource RegistrationMark}" HorizontalAlignment="Right"
+                          VerticalAlignment="Top" Margin="0,-6,-6,0" />
+                    <Path Style="{StaticResource RegistrationMark}" HorizontalAlignment="Left"
+                          VerticalAlignment="Bottom" Margin="-6,0,0,-6" />
+                    <Path Style="{StaticResource RegistrationMark}" HorizontalAlignment="Right"
+                          VerticalAlignment="Bottom" Margin="0,0,-6,-6" />
+                </Grid>
+            </Grid>
 
-    </Grid>
+            <!-- ============================ BUSY ============================ -->
+            <Grid Background="{DynamicResource LoginOverlay}"
+                  Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}">
+                <Grid Width="420" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Border Background="{DynamicResource Ground}" BorderBrush="{DynamicResource Divider}"
+                            BorderThickness="1" Padding="26,24">
+                        <StackPanel>
+                            <TextBlock Text="{Binding BusyMessage}" FontFamily="{StaticResource HeadingFont}"
+                                       FontWeight="SemiBold" FontSize="17" />
+
+                            <ProgressBar IsIndeterminate="True" Margin="0,16,0,0" Height="3" />
+
+                            <TextBlock Text="{Binding BusyDetail}" Style="{StaticResource Mono}"
+                                       Margin="0,14,0,0" TextWrapping="Wrap"
+                                       Visibility="{Binding HasBusyDetail, Converter={StaticResource BoolToVis}}" />
+
+                            <TextBlock Text="DO NOT TOUCH THE KEYBOARD WHILE THIS TYPES"
+                                       Style="{StaticResource Mono}" Margin="0,10,0,0"
+                                       Foreground="{DynamicResource Ink}"
+                                       Visibility="{Binding BusyIsTyping, Converter={StaticResource BoolToVis}}" />
+
+                            <Button Content="CANCEL" Margin="0,18,0,0" HorizontalAlignment="Left"
+                                    Click="OnCancelLogin" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </Grid>
+                </Grid>
+            </DockPanel>
+        </Grid>
+    </Border>
 </Window>

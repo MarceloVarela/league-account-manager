@@ -86,6 +86,19 @@ public sealed class LoginContext
     /// <summary>Raised with the loot inventory read from the client after sign-in.</summary>
     public Action<Riot.LootSnapshot>? LootObserved { get; init; }
 
+    public Action<Riot.MatchSnapshot>? MatchesObserved { get; init; }
+
+    /// <summary>
+    /// Starts stealth, if it is switched on and everything it needs is in place, and hands back the
+    /// argument the client must be launched with.
+    ///
+    /// Returns an empty string when stealth is off or unavailable, and the caller then launches
+    /// exactly as it always did. It is deliberately shaped so that "no stealth" is the same code
+    /// path as "no stealth configured" — there is no branch in the strategies that can fail a
+    /// sign-in over a feature that is only ever a convenience.
+    /// </summary>
+    public Func<CancellationToken, Task<string>>? BeginStealth { get; init; }
+
     public void Report(LoginStage stage, string message) => Progress.Report(new LoginProgress(stage, message));
 }
 
