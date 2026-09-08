@@ -285,8 +285,12 @@ master password ──Argon2id(64 MiB, t=3, p=4)──► vault key (32 bytes)
   the vault.
 - **Auto-locks** on idle, on Windows locking, and optionally on minimise. The key is zeroed on lock.
 - **Secrets never reach a log.** Passwords and backup codes are typed `SecretText`, whose `ToString()`
-  returns `***`, and a redacting serialiser masks every one of them at once. Tests assert it, and that
-  the CSV export contains no secret of any kind.
+  returns `***` — so a secret interpolated into a trace or a message string yields nothing, which is
+  the mechanism actually doing the work. Tests assert it, and separately that the CSV export contains
+  no secret of any kind.
+  ⚠ `VaultJson.Redacted`, the whole-document redacting serialiser, is **tested but not yet wired to
+  anything** — it has no production call site. It is the right tool for a future diagnostic dump, but
+  today it protects nothing, and this line used to imply otherwise.
 - Every save is atomic and takes a timestamped backup first, so a crash mid-write costs you the last
   save, never the vault.
 
@@ -300,7 +304,7 @@ There is no server, no account and no telemetry, but "no network" would be a lie
 | `raw.communitydragon.org` | a skin tile is not cached, and League is closed | the asset path. Falls back from the running client, which is preferred |
 | `github.com/.../releases/latest` | **stealth only**, and only when the certificate it shipped with is near expiry | nothing but the request |
 | `clientconfig.rpg.riotgames.com`, `riot-geo.pas.si.riotgames.com` | **stealth only** | the client's *own* request, forwarded with its own headers — the same call it would make directly |
-| `*.api.riotgames.com` | **only if you enter an API key**, which nothing requires | your key and a Riot ID |
+| `*.api.riotgames.com` | **only if you enter an API key**, which nothing requires | your key, a Riot ID, and the PUUID and match ids Riot itself just returned |
 
 Both caches are once-per-asset and go quiet afterwards; the app works offline once warmed. Nothing in
 that table carries a vault password, a session, a recovery answer or an identifier for you.
@@ -376,18 +380,38 @@ performance and safety optimisation, not a requirement.
 
 ---
 
-## An optional API key
+## The API key, and what it buys
 
-**Signing in works without one, and so does everything in the table above.** A key is useful for
-exactly one thing: refreshing an account you are *not* currently signed into.
+**You need one for the full feature set.** Everything in the table above is read from the local
+client and needs no key at all — signing in, rank, LP, level, wallet, collection, loot, mastery, the
+form chart and the recovery dossier all arrive without one, none of it rate-limited. But three things
+are key-gated, and they are the three that read an account **without signing into it**:
 
-Get one at [developer.riotgames.com](https://developer.riotgames.com) and paste it into
-**Settings → riot api key**. Register a **Personal** key — Development keys expire every 24 hours.
+- **REFRESH RANKS**, in the top bar, walks every account signed into at least once and updates rank,
+  LP, level, icon and Riot ID straight from Riot — and notices an account renamed since last time.
+- **Refresh rank and level** (card `⋯` menu), the same for one account.
+- **Estimate account age** (card `⋯` menu), which binary-searches match history for the oldest game
+  on record. The recovery sheet asks for this one by name, so it is worth knowing what provides it.
 
-**Estimate account age** (card `⋯` menu) binary-searches match history for the oldest game. Note the
-honest caveat: match-v5 only reaches back to roughly mid-2021, so for an older account the answer is
-*"at least this old"* and the app says exactly that rather than presenting a floor as a birthday. The
-client's real creation date, when available, is better than this in every way.
+None of the three is hidden or greyed out without a key; each says what is missing and stops. So the
+cost of going without is not that a button vanishes — it is that **every card's rank is frozen at the
+last sign-in to that account**. With thirty accounts, catching the ladder up means signing into thirty
+of them one at a time, and every sign-in closes the Riot Client.
+
+Get a key at [developer.riotgames.com](https://developer.riotgames.com) and paste it into
+**Settings → riot api key → add**. Register a **Personal** key — a Development key expires every 24
+hours, which means re-pasting it daily. *Test key* checks it against a trivial endpoint and repeats
+what Riot said, because "the key was rejected" is otherwise ambiguous between an expired key, a key
+pasted short, and a request at fault.
+
+**The key is stored in `vault.dat` with everything else** — inside the AES-GCM body, typed
+`SecretText` so it cannot reach a log — and it is sent to `*.api.riotgames.com` and nowhere else. When
+Riot rejects a call the app reports the stored key's length and last four characters only, never the
+key, because a half-pasted key is the usual cause and is otherwise invisible.
+
+The age estimate carries an honest caveat: match-v5 only reaches back to roughly mid-2021, so for an
+older account the answer is *"at least this old"* and the app says exactly that rather than presenting
+a floor as a birthday. The client's real creation date, when available, is better in every way.
 
 ---
 
@@ -436,7 +460,14 @@ lockfacts          account count and idle-lock minutes, for the same reason
 stealth.pfx        a cached copy of the stealth certificate, if a fresher one was fetched
 stealth-greeted    an empty file. Delete it and the in-game friend introduces itself once more
 login-ui.json      the login-form selectors, if you ever need to fix them without a rebuild
+riot-config-backup/  pristine copies of the Riot files the app edits, taken before its first write
 ```
+
+⚠ **`riot-config-backup/` holds one file worth knowing about.** Before the app first rewrites
+`RiotGamesPrivateSettings.yaml` — the file holding your live Riot session — it copies the original
+aside as `RiotGamesPrivateSettings.yaml.original`. That copy is **not encrypted**, is written once and
+never refreshed, and nothing in the app ever reads it back. It is a safety copy with no restore path.
+Delete it if you would rather it not exist; nothing depends on it.
 
 `login.log` is **not encrypted** and is meant to be readable — it exists so a failed sign-in can be
 diagnosed. It carries no password, no username, no session and no token; the discipline is enforced by

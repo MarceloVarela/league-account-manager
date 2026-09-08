@@ -494,29 +494,22 @@ public class StealthCertificateTests
     }
 
     /// <summary>
-    /// The shipped certificate, or a skip.
+    /// The shipped certificate.
     ///
-    /// It is git-ignored on purpose, so a contributor's clone does not have it — and these are a
-    /// maintainer ship-gate against shipping an expired certificate, not something a contributor can
-    /// satisfy. Failing their build for a file they were never given is noise; skipping says so.
+    /// Unconditional: every caller is a <see cref="CertificateFactAttribute"/>, which has already
+    /// skipped the test if the file is absent. So reaching here without one is a real failure, not
+    /// a checkout without the certificate.
     /// </summary>
-    private static byte[]? Shipped()
-    {
-        var path = Path.Combine(Root(), "src", "LAM.App", "Assets", "stealth.pfx");
+    private static byte[] Shipped() => File.ReadAllBytes(StealthCertificatePath.Value);
 
-        return File.Exists(path) ? File.ReadAllBytes(path) : null;
-    }
-
-    [Fact]
+    [CertificateFact]
     public void The_shipped_certificate_is_for_the_configured_host()
     {
         // The hostname and the certificate are a pair: the client asks for one name and checks the
         // certificate presented matches it. Changing StealthEndpoints.Host without reissuing gives a
         // certificate the client rejects, and the only symptom is an empty friends list.
-        if (Shipped() is not { } blob) return;
-
         var certificates = X509CertificateLoader.LoadPkcs12Collection(
-            blob, password: null, X509KeyStorageFlags.DefaultKeySet);
+            Shipped(), password: null, X509KeyStorageFlags.DefaultKeySet);
 
         var leaf = certificates.FirstOrDefault(c => c.HasPrivateKey);
         Assert.NotNull(leaf);
@@ -533,13 +526,11 @@ public class StealthCertificateTests
         Assert.DoesNotContain(names, n => n.StartsWith("*", StringComparison.Ordinal));
     }
 
-    [Fact]
+    [CertificateFact]
     public void The_shipped_certificate_has_not_expired()
     {
-        if (Shipped() is not { } blob) return;
-
         var certificates = X509CertificateLoader.LoadPkcs12Collection(
-            blob, password: null, X509KeyStorageFlags.DefaultKeySet);
+            Shipped(), password: null, X509KeyStorageFlags.DefaultKeySet);
 
         var leaf = certificates.First(c => c.HasPrivateKey);
 
@@ -555,15 +546,13 @@ public class StealthCertificateTests
             + ", which is inside the refresh window. Reissue it before shipping this build.");
     }
 
-    [Fact]
+    [CertificateFact]
     public void The_chain_ships_with_it()
     {
         // Only the leaf would leave the client to build the path itself, which is slower and fails
         // outright on a machine that cannot fetch the issuer.
-        if (Shipped() is not { } blob) return;
-
         var certificates = X509CertificateLoader.LoadPkcs12Collection(
-            blob, password: null, X509KeyStorageFlags.DefaultKeySet);
+            Shipped(), password: null, X509KeyStorageFlags.DefaultKeySet);
 
         Assert.True(certificates.Count > 1,
             "Only the leaf certificate is present. Re-export with -certfile ca.cer so the "

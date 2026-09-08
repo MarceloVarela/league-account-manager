@@ -1,0 +1,25 @@
+<Project>
+
+  <!--
+    Keeps the developer's machine out of the shipped binaries.
+
+    Without this, every build stamps an absolute path into the assembly twice: the CodeView (RSDS)
+    debug-directory entry records where the .pdb lived, and SourceLink records the source root. Both
+    read "C:\Users\<whoever built it>\...", so the published .exe ships the builder's Windows account
+    name to every user who downloads it. It is not a secret and not account data, but it is personal
+    information nobody agreed to publish, and it costs nothing to remove.
+
+    PathMap rewrites those paths to /_/ at compile time. Diagnostics survive — stack traces keep their
+    file names and line numbers, they just read "/_/src/LAM.App/App.xaml.cs" instead of naming a
+    person. ContinuousIntegrationBuild makes SourceLink emit the mapped root rather than the local one.
+
+    A test in LAM.Tests asserts the built assemblies contain no "C:\Users\" string, so a regression
+    here fails the build rather than quietly shipping.
+  -->
+  <PropertyGroup>
+    <PathMap>$(MSBuildThisFileDirectory)=/_/</PathMap>
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+    <Deterministic>true</Deterministic>
+  </PropertyGroup>
+
+</Project>
