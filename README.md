@@ -1,9 +1,23 @@
-# League Account Manager
+# Hextech Manager
 
 A protected vault for your Riot accounts. Click a card, and it signs in.
 
-Windows, C# / WPF on .NET 9. Everything stays on your machine — no server, no sync, no telemetry, and
-no API key required for anything that matters.
+Windows, C# / WPF on .NET 9. No server, no sync, no telemetry, no account, and no API key required
+for anything that matters. Your vault never leaves the machine.
+
+*(The repository is still `league-account-manager`, and the assembly is still
+`LeagueAccountManager.exe`. The product name changed; the identifiers did not.)*
+
+**Download:** [latest release](https://github.com/MarceloVarela/league-account-manager/releases/latest).
+`HextechManager.exe` is one self-contained file. Windows will warn that it is unsigned — *More info* →
+*Run anyway*.
+
+## Requirements
+
+- Windows 10 1809 or later, 64-bit
+- The Riot Client, installed and run at least once
+- **Administrator.** Not optional, and [there is a reason](#it-asks-for-administrator-and-why)
+- Nothing else. The download bundles its own .NET
 
 ---
 
@@ -51,6 +65,7 @@ from the last sign-in rather than a live figure, and the UI says so.
 | Champions and skins owned, with the date each was acquired | ↑ |
 | Loot — shards, essence, keys, chests, eternals, with disenchant values and expiry | ↑ |
 | Champion mastery and ranked season rewards | ↑ |
+| **The last ten ranked games**, drawn as the form chart on the card | ↑, when the client serves it in time |
 | **Account created**, last password change, legacy login username, original region | ↑ |
 | **Every Riot ID the account has used**, with the date each was taken — Riot's own record | ↑ |
 | Registered email (masked by Riot), phone (country code + last 4), 2FA, region history | ↑ |
@@ -62,8 +77,36 @@ enumerated looking for purchase or receipt history. **There is none.** `/lol-inv
 looks like it would be and is a false positive. So the earliest-purchase reference stays a field you
 fill in, and the app does not pretend otherwise.
 
+**The form chart can be missing, and that is not a fault.** Match history is read last in the
+sign-in pass, deliberately: the client serves it late, and it is the one thing here worth abandoning
+rather than delaying the rest. So it is absent on an account captured before this existed, and it can
+simply not arrive in time — signing in again fills it. When it is absent the card shows the **season**
+totals with `SEASON` beside them, and draws no bars, because a ten-bar chart built from a season total
+would be a picture of data that does not exist.
+
 **Recovery sheet** (card `⋯` menu) renders the lot as one page ordered the way a support ticket wants
 it, and **omits secrets by default** so it is safe to paste.
+
+---
+
+## Getting around
+
+**The grid** is one card per account: rank in its own tier colour, LP, level, champions and skins
+owned, essence, honour, and when the client data was last read. Search matches name, tagline, region,
+tags and rank. Sort cycles last used → rank → name.
+
+**Cards warn about themselves.** An account with no recovery email, with two-factor but no backup
+codes, or that Riot reports as disabled says so on the card. Warnings can be dismissed per account —
+the `✕` on the plate — and *Show hidden warnings* on the card's `⋯` menu brings them back. Dismissing
+hides the badge, not the problem: it still appears in the account's details.
+
+**Quick swap** lives on the tray icon and on `alt + \`, from anywhere including inside a game. One row
+per account, rank in its tier colour, click to sign in.
+
+**Minimise to tray** is a setting, off by default, so minimising keeps the app in the taskbar until you
+say otherwise.
+
+**Dark and light** both ship; the theme switch is in Settings and applies to the lock screen too.
 
 ---
 
@@ -89,11 +132,30 @@ meaningless for one.
 
 ---
 
+## Carrying your keybinds between accounts
+
+League stores hotkeys, HUD layout and video options **per account** and resets them on every switch —
+enough of a nuisance that tools exist which do nothing else. **Settings → League settings** turns it
+on: save your setup once, and it is restored after each sign-in.
+
+This is the only feature that writes into the game's own configuration, so it is the most destructive
+thing in the app and is built accordingly:
+
+- **Off unless you turn it on**, and it does nothing at all until you press *Save current settings*.
+- **A pristine copy** of `PersistedSettings.json`, `game.cfg` and `input.ini` is taken before the first
+  ever write, and *Revert to originals* puts them back.
+- **Close League first.** It holds those files open and rewrites them on exit, so a restore performed
+  while it is running is simply overwritten. Restoring refuses to run in that state rather than
+  pretending to have worked.
+
+---
+
 ## Vault safety
 
 - **Deleting is reversible.** *Move to trash* hides an account but keeps its password, session and
-  recovery dossier; purging is a separate, deliberate act. The dossier is the one thing here that
-  signing in again cannot rebuild.
+  recovery dossier. The dossier is the one thing here that signing in again cannot rebuild.
+  ⚠ There is currently no button to restore or to purge a trashed account — the data is kept and
+  nothing is lost, but getting it back means editing the vault. Both are on the list.
 - **Reused-password detection.** With a pile of smurfs, one leaked credential pair tried everywhere
   takes all of them together. Passwords are compared by a fingerprint held only in memory, so no list
   of them is ever assembled, and no finding quotes a secret.
@@ -106,6 +168,58 @@ meaningless for one.
   ransomware, not a wiped profile.
 - **Streamer mode** hides account names automatically while capture software is running. Your own
   labels are left alone — it is the Riot ID and login name that are searchable.
+
+---
+
+## Stealth login — appearing offline
+
+Optional, **off by default**. Makes an account appear **offline**, **on mobile**, or **online** to its
+friends list, while the session stays completely normal: you are signed in, you can play, and your own
+chat works.
+
+League has no "appear offline". The way every tool in this space provides one is the same: stand
+between the League client and Riot's chat server on your own machine, and edit the presence the client
+announces. This app does that, and nothing else — it reads no game memory, modifies no game files, and
+never touches Vanguard or any anti-cheat.
+
+```
+                  ┌── config: "chat lives at localhost.marcrake.lol" ──┐
+League client ────┤                                                    ├──► Riot
+                  └── chat: <show>chat</show> ──► <show>offline</show> ─┘
+```
+
+The client accepts the local connection because the certificate is genuine, not because anything is
+bypassed: `localhost.marcrake.lol` is a real public hostname whose address record is `127.0.0.1`, with
+a real Let's Encrypt certificate for it. Riot stopped honouring the client's own
+`chat.allow_bad_cert.enabled` flag in April 2026, so this is now the only route that works at all.
+
+**A friend called *Hextech Manager*** appears at the top of your friends list once it is running.
+Message it `offline`, `mobile` or `online` to change how you appear without leaving the game; `status`
+and `help` also work. Nothing you send it ever reaches Riot — there is no such account. The same
+options are on the tray icon.
+
+### What it will not do
+
+**It fails open, always.** If the hostname does not resolve, or the certificate is unusable, or a port
+will not bind, the client launches **untouched** and signs in normally, and the status bar says so.
+Once the client has been handed a rewritten configuration it no longer knows where the real chat server
+is, so "half on" is not a state that can exist — it is fully working before the client starts, or it
+does not happen.
+
+**It never logs a stanza.** Your account's authentication token crosses the proxy in plain text. A test
+reads the source and fails the build if any trace call could carry a stanza, a body or an authorization
+header into `login.log`.
+
+### Two things to know before you switch it on
+
+**Lobby chat is a trade.** The presence that makes lobby and champion-select chat work is addressed at
+the room, not at your friends list, so it is passed through untouched — which means a lobby can see a
+status your friends list is not being told. **Settings → lobby chat while hidden** turns that off too,
+and lobby and champion-select chat then stop working entirely. On by default.
+
+**Riot's position is unknown.** Riot has never published one on this technique, and there is no
+documented case of it being actioned — after years of a very widely used tool doing the same thing.
+That is not the same as approval. It is off by default, and the choice is yours to make deliberately.
 
 ---
 
@@ -157,9 +271,15 @@ master password ──Argon2id(64 MiB, t=3, p=4)──► vault key (32 bytes)
   modelled on uses only a hardware-derived key, which means anyone sitting at your desk can read
   every password. That is the gap this closes.
 - **Windows Hello is a second door to the same key, never a replacement.** The master password always
-  works, so a wiped Windows profile is an inconvenience rather than the permanent loss of everything.
-  Hello enrolment signs a challenge twice and refuses if the signature is not reproducible, because a
-  scheme that enrolled cleanly and then failed to unlock would fail at the worst possible moment.
+  works. Hello enrolment signs a challenge twice and refuses if the signature is not reproducible,
+  because a scheme that enrolled cleanly and then failed to unlock would fail at the worst possible
+  moment.
+- ⚠ **Machine binding is the exception to that.** With *bind this vault to this Windows profile* on
+  (**Settings → advanced**), the encrypted body is additionally wrapped with DPAPI for your Windows
+  user — and then a wiped profile, a reinstall or a new machine means the vault cannot be opened
+  **even with the correct master password**. That is the point of the setting: a copied `vault.dat` is
+  useless elsewhere. It is also the one way to lose everything while doing nothing wrong, so take an
+  export before you reinstall Windows.
 - **Tamper-evident.** The header is fed to AES-GCM as associated data, so flipping one byte anywhere —
   including downgrading the recorded Argon2 cost — fails authentication instead of silently weakening
   the vault.
@@ -169,6 +289,21 @@ master password ──Argon2id(64 MiB, t=3, p=4)──► vault key (32 bytes)
   the CSV export contains no secret of any kind.
 - Every save is atomic and takes a timestamped backup first, so a crash mid-write costs you the last
   save, never the vault.
+
+### Everything that leaves the machine
+
+There is no server, no account and no telemetry, but "no network" would be a lie. The complete list:
+
+| Where | When | What is sent |
+|---|---|---|
+| `ddragon.leagueoflegends.com` | an account's profile icon is not cached yet | the icon id. Riot's own public CDN, no key |
+| `raw.communitydragon.org` | a skin tile is not cached, and League is closed | the asset path. Falls back from the running client, which is preferred |
+| `github.com/.../releases/latest` | **stealth only**, and only when the certificate it shipped with is near expiry | nothing but the request |
+| `clientconfig.rpg.riotgames.com`, `riot-geo.pas.si.riotgames.com` | **stealth only** | the client's *own* request, forwarded with its own headers — the same call it would make directly |
+| `*.api.riotgames.com` | **only if you enter an API key**, which nothing requires | your key and a Riot ID |
+
+Both caches are once-per-asset and go quiet afterwards; the app works offline once warmed. Nothing in
+that table carries a vault password, a session, a recovery answer or an identifier for you.
 
 ---
 
@@ -194,7 +329,7 @@ to keep those working without altering your Riot setup.
 If you clear those tick boxes (Properties → Compatibility on each executable), nothing needs elevation
 any more and `requireAdministrator` can come back out of `src/LAM.App/app.manifest`.
 
-**Settings → Diagnostics** reports your current integrity level and any Riot compatibility flags, so a
+**Settings → advanced** reports your current integrity level and any Riot compatibility flags, so a
 mismatch reads as a stated fact rather than a mystery. `lam-diag paths` prints the same thing.
 
 ---
@@ -210,7 +345,11 @@ mismatch reads as a stated fact rather than a mystery. `lam-diag paths` prints t
    *"Types the saved password"* to *"Sign in from the saved session — no typing"*.
 
 Clicking the card body opens the account rather than signing in — a sign-in closes the Riot Client and
-League, so it should never happen because a window was opened.
+League, so it should never happen because a window was opened. **LOG IN** on the card footer is the
+button that signs in.
+
+Two things worth finding early: the tray icon carries **quick swap**, and `alt + \` opens the same
+list from anywhere, including from inside a game. Neither needs the window.
 
 ---
 
@@ -243,7 +382,7 @@ performance and safety optimisation, not a requirement.
 exactly one thing: refreshing an account you are *not* currently signed into.
 
 Get one at [developer.riotgames.com](https://developer.riotgames.com) and paste it into
-**Settings → Riot API**. Register a **Personal** key — Development keys expire every 24 hours.
+**Settings → riot api key**. Register a **Personal** key — Development keys expire every 24 hours.
 
 **Estimate account age** (card `⋯` menu) binary-searches match history for the oldest game. Note the
 honest caveat: match-v5 only reaches back to roughly mid-2021, so for an older account the answer is
@@ -256,7 +395,7 @@ client's real creation date, when available, is better than this in every way.
 
 ```powershell
 dotnet build
-dotnet test                                  # 313 tests
+dotnet test                                  # 386 tests
 
 # Launch the built .exe directly. `dotnet run` cannot start it: the embedded
 # requireAdministrator manifest means the dev host has to go through UAC.
@@ -271,11 +410,77 @@ dotnet publish src/LAM.App -c Release -r win-x64 --self-contained `
 src/LAM.Core     vault, crypto, Riot integration, login strategies, fleet analysis  ← unit-tested
 src/LAM.App      WPF UI
 tools/LAM.Diag   lam-diag pre-flight checks
-tests/LAM.Tests  313 tests
+tests/LAM.Tests  386 tests
 ```
+
+**The stealth certificate is not in the repo.** `src/LAM.App/Assets/stealth.pfx` is git-ignored: it is
+a real certificate for a hostname only this project controls, and it expires every ninety days. The
+build and the tests are both fine without it — stealth simply reports itself unavailable and sign-in
+proceeds exactly as normal.
 
 If a Riot update ever breaks the field detection, the selectors and status phrases live in one file —
 `login-ui.json` beside the vault (`%APPDATA%\LeagueAccountManager`). It is a data fix, not a rebuild.
+
+---
+
+## What lands on disk
+
+Everything lives in `%APPDATA%\LeagueAccountManager`:
+
+```
+vault.dat          your accounts, AES-GCM encrypted. The only file that holds secrets
+backups/           rolling copies of the above, taken before every save
+logs/login.log     a sign-in trace: stage names, window handles, process ids, outcomes
+theme              which palette to draw the lock screen in, before anything is decrypted
+lockfacts          account count and idle-lock minutes, for the same reason
+stealth.pfx        a cached copy of the stealth certificate, if a fresher one was fetched
+stealth-greeted    an empty file. Delete it and the in-game friend introduces itself once more
+login-ui.json      the login-form selectors, if you ever need to fix them without a rebuild
+```
+
+`login.log` is **not encrypted** and is meant to be readable — it exists so a failed sign-in can be
+diagnosed. It carries no password, no username, no session and no token; the discipline is enforced by
+tests, not by hope. Everything worth stealing is in `vault.dat`.
+
+---
+
+## Maintaining it
+
+**The stealth certificate expires every ~90 days.** When it does, stealth stops working for everyone
+and nothing says why — the friends list simply shows people online. The current one expires
+**5 December 2026**; Let's Encrypt suggests renewing from **5 November**.
+
+Renewing it:
+
+```bash
+# 1. acme.sh prints a TXT record; add it at the DNS host for marcrake.lol
+~/.acme.sh/acme.sh --issue --dns -d localhost.marcrake.lol --keylength ec-256     --server letsencrypt --yes-I-know-dns-manual-mode-enough-go-ahead-please
+
+# 2. once the record resolves
+~/.acme.sh/acme.sh --renew -d localhost.marcrake.lol --ecc     --yes-I-know-dns-manual-mode-enough-go-ahead-please
+
+# 3. bundle it WITH the chain and no password
+D=localhost.marcrake.lol
+openssl pkcs12 -export -out stealth.pfx -inkey ~/.acme.sh/${D}_ecc/$D.key     -in ~/.acme.sh/${D}_ecc/$D.cer -certfile ~/.acme.sh/${D}_ecc/ca.cer -passout pass:
+```
+
+Then put it in `src/LAM.App/Assets/stealth.pfx` **and** attach it to a new GitHub release as
+`stealth.pfx`. The app fetches `releases/latest/download/stealth.pfx` when the copy it shipped with is
+within 20 days of expiry, so existing installs pick up the new one without anyone reinstalling — which
+is the entire reason it is published rather than only embedded.
+
+Three things that will bite:
+
+- It must be **DNS-01**. The hostname resolves to `127.0.0.1`, so nothing can reach it over HTTP to
+  verify — HTTP-01 cannot work, ever.
+- **Never a wildcard.** The private key ships inside the app and is public by construction. It is
+  harmless only because the one name it vouches for can never resolve anywhere but the user's own
+  machine.
+- The `-certfile` matters. Without the chain the client has to build the path itself, which is slower
+  and fails outright on a machine that cannot.
+
+The test suite fails once the shipped certificate is inside that 20-day window, so this cannot slip
+past quietly — but only if someone runs it.
 
 ---
 
@@ -317,3 +522,8 @@ before then is refused rather than allowed to overwrite a good one.
 - **The master password cannot be recovered.** Take an encrypted export (**Settings → Backup**) and
   keep it somewhere other than this PC. Exports are deliberately *not* machine-bound so they open
   elsewhere — which makes the export passphrase the only thing protecting them. Use a strong one.
+- **Importing merges, and it merges by replacing.** An account already in the vault with the same id is
+  **replaced whole** by the one in the file rather than having its fields merged, so importing an old
+  export rolls those accounts back to what they were when it was taken. Re-importing your own current
+  export is therefore harmless, but an old one is not. The confirmation says how many would be added
+  and how many replaced before anything is written — read that number.

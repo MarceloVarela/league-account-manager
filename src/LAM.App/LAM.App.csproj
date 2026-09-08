@@ -55,7 +55,14 @@
       a connection the user's own machine makes to itself. It must never be a wildcard, and it must
       never be reused for anything else.
     -->
-    <Resource Include="Assets\stealth.pfx" />
+    <!--
+      Conditional, because the file is git-ignored (*.pfx) and deliberately not in the repo. Without
+      the condition a fresh clone cannot build at all: BG1002, "File 'Assets\stealth.pfx' cannot be
+      found". Everything downstream already treats it as optional — AppServices.EmbeddedCertificate()
+      returns null when the pack URI resolves to nothing, and stealth then reports itself unavailable
+      and sign-in proceeds normally.
+    -->
+    <Resource Include="Assets\stealth.pfx" Condition="Exists('Assets\stealth.pfx')" />
     <Resource Include="Assets\hextech-512.png" />
     <Resource Include="Assets\hextech-small.png" />
     <None Include="Assets\Fonts\OFL.txt" CopyToOutputDirectory="PreserveNewest" />
