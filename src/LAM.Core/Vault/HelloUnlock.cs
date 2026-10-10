@@ -170,10 +170,37 @@ public sealed class HelloUnlock
         }
     }
 
+    /// <summary>
+    /// TPM Base Services said the request was malformed. In practice this is what a failing or
+    /// unresponsive TPM reports, and it arrives as a <see cref="COMException"/> whose Message is the
+    /// empty string — so anything that simply prints <c>ex.Message</c> shows a blank box.
+    /// </summary>
+    private const int TbsBadParameter = unchecked((int)0x80284002);
+
     private static async Task<byte[]> SignAsync(KeyCredential credential, byte[] challenge)
     {
         var buffer = CryptographicBuffer.CreateFromByteArray(challenge);
-        var result = await credential.RequestSignAsync(buffer);
+
+        KeyCredentialOperationResult result;
+        try
+        {
+            result = await credential.RequestSignAsync(buffer);
+        }
+        catch (COMException ex)
+        {
+            // The signing key lives in the TPM. When the chip stops answering, the whole Hello path
+            // dies here — the credential still *opens*, it just cannot sign — and the projected
+            // exception carries no message at all. Say what happened and point at the way in that
+            // still works, rather than letting an empty error reach the user.
+            throw new HelloUnlockException(
+                ex.HResult == TbsBadParameter
+                    ? "Windows Hello could not sign: this machine's TPM security chip is not "
+                      + "responding, so the key Hello stores there cannot be used. This is a Windows "
+                      + "or hardware fault, not a problem with your vault — unlock with your master "
+                      + "password, which does not use the TPM."
+                    : "Windows Hello failed at the signing step (0x" + ex.HResult.ToString("X8")
+                      + "). Unlock with your master password.");
+        }
 
         if (result.Status != KeyCredentialStatus.Success)
             throw new HelloUnlockException(Describe(result.Status));

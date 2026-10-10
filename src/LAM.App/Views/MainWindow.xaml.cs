@@ -560,6 +560,17 @@ public partial class MainWindow : Window
         {
             ShowLockError(ex.Message);
         }
+        catch (VaultProfileMismatchException ex)
+        {
+            ShowLockError(ex.Message);
+        }
+        catch (VaultFormatException ex)
+        {
+            // UnlockWithKey re-reads vault.dat, so a damaged file surfaces here as well as on the
+            // password path. Anything uncaught lands in the global handler, which is how a Hello
+            // failure came to be reported as "Something went wrong" with an empty body.
+            ShowLockError(ex.Message);
+        }
     }
 
     private void OpenVault(UnlockedVault vault)
