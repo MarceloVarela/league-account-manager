@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using FlaUI.Core.AutomationElements;
 using FlaUI.Core.Definitions;
+using FlaUI.Core.Exceptions;
 using FlaUI.UIA3;
 
 namespace LAM.Core.Login;
@@ -52,11 +53,13 @@ public sealed class RiotWindowInspector : IDisposable
 
                     var element = _automation.FromHandle(process.MainWindowHandle);
                     var window = element?.AsWindow();
-                    if (window is not null && !window.IsOffscreen) return window;
+                    if (window is not null && IsOnScreen(window)) return window;
                 }
-                catch (Exception ex) when (ex is InvalidOperationException or COMException)
+                catch (Exception ex) when (ex is InvalidOperationException or COMException or FlaUIException)
                 {
-                    // The process exited between enumeration and inspection.
+                    // The process exited between enumeration and inspection, or the client's UIA tree
+                    // refused a property while we read it. Either way, try again next poll rather than
+                    // failing the whole sign-in.
                 }
                 finally
                 {
@@ -333,11 +336,34 @@ public sealed class RiotWindowInspector : IDisposable
         }
     }
 
+    /// <summary>
+    /// Whether an element is on screen, treating "the client does not expose IsOffscreen" as on screen.
+    ///
+    /// The Riot Client is Electron, and a build shipped around October 2026 stopped exposing the UIA
+    /// <c>IsOffscreen</c> property on its window and controls. FlaUI then throws
+    /// <see cref="PropertyNotSupportedException"/> on the read — which, uncaught, surfaced as
+    /// "Could not sign in. autofill: The requested property 'IsOffscreen' [#30022] is not supported"
+    /// and failed the entire sign-in. An element whose off-screen state cannot be read is far more
+    /// likely to be a normal visible window than a hidden one, so assume visible and let the later
+    /// field checks decide, rather than discarding a perfectly good window.
+    /// </summary>
+    private static bool IsOnScreen(AutomationElement element)
+    {
+        try
+        {
+            return !element.IsOffscreen;
+        }
+        catch (PropertyNotSupportedException)
+        {
+            return true;
+        }
+    }
+
     private static bool IsUsable(AutomationElement element)
     {
         try
         {
-            return element.IsAvailable && !element.IsOffscreen && element.Properties.IsEnabled.ValueOrDefault;
+            return element.IsAvailable && IsOnScreen(element) && element.Properties.IsEnabled.ValueOrDefault;
         }
         catch (Exception)
         {
