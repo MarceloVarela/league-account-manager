@@ -98,6 +98,19 @@ public sealed class AppServices
     public AppServices WithRiotClientPath(string? path) => new(Paths.Root, path);
 
     /// <summary>
+    /// The stealth certificate's current state, for the Settings pane — computed locally, no network.
+    ///
+    /// Stealth fails open silently when the certificate expires (you simply appear online), so without
+    /// this the only clue is a line in the log. This surfaces "valid until / expiring / expired" so the
+    /// user is never blindsided again.
+    /// </summary>
+    public LAM.Core.Stealth.StealthCertificateInfo DescribeStealthCertificate()
+        => LAM.Core.Stealth.StealthCertificate.Describe(
+            EmbeddedCertificate(),
+            Path.Combine(Paths.Root, "stealth.pfx"),
+            LAM.Core.Stealth.StealthEndpoints.Host);
+
+    /// <summary>
     /// The certificate shipped with this build, if there is one.
     ///
     /// A fresh install has to work before it can reach the refresh URL, and a user behind a filter

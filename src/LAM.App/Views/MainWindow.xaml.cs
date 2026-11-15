@@ -443,11 +443,29 @@ public partial class MainWindow : Window
         _model.Status = "Appearing " + mode.ToString().ToLowerInvariant() + ".";
     }
 
-    private void RestoreFromTray()
+    private void RestoreFromTray() => BringToFront();
+
+    /// <summary>
+    /// Brings the window to the foreground — the single "show me" path shared by the tray, quick swap,
+    /// and a second launch of the exe (<see cref="App"/>'s single-instance guard).
+    ///
+    /// Un-hides (it may be hidden in the tray), un-minimizes, and focuses. The brief topmost flip is
+    /// the dependency-free way to clear whatever had the foreground — a game, usually; paired with the
+    /// second instance's AllowSetForegroundWindow grant, it reliably wins the foreground even when the
+    /// request originates from another process.
+    /// </summary>
+    internal void BringToFront()
     {
-        Show();
-        WindowState = WindowState.Normal;
+        if (!IsVisible) Show();
+        if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
+
         Activate();
+
+        var wasTopmost = Topmost;
+        Topmost = true;
+        Topmost = wasTopmost;
+
+        Focus();
     }
 
     private void ShowQuickSwap()

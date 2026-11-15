@@ -131,6 +131,7 @@ public partial class SettingsPane : UserControl
                         Save();
                         Render();
                     }),
+                StealthCertificateRow(),
                 SettingRowView.Toggle("auto-accept queue", "accepts the ready check for you",
                     false, _ => { }, enabled: false,
                     tip: "Deliberately not built. It plays the game on your behalf, which is the "
@@ -198,6 +199,34 @@ public partial class SettingsPane : UserControl
 
         // Re-read: the window may have changed a value this pane also shows.
         Render();
+    }
+
+    /// <summary>
+    /// Surfaces the stealth certificate's expiry so it is never a silent surprise.
+    ///
+    /// Appear-offline rests on a ~90-day Let's Encrypt certificate; when it lapses the feature fails
+    /// open and you simply look online, with nothing in the UI to say why. This row is that missing
+    /// "why" — valid / expiring / expired, with the date, read locally with no network call.
+    /// </summary>
+    private SettingRowView StealthCertificateRow()
+    {
+        var info = _services.DescribeStealthCertificate();
+        var when = info.NotAfter?.ToString("d MMM yyyy") ?? string.Empty;
+
+        return info.Status switch
+        {
+            LAM.Core.Stealth.StealthCertificateStatus.Expired => SettingRowView.Readout(
+                "stealth certificate", "renew it, or the friends list can see you online",
+                "EXPIRED " + when),
+            LAM.Core.Stealth.StealthCertificateStatus.ExpiringSoon => SettingRowView.Readout(
+                "stealth certificate", "renew soon, or appear-offline will stop working",
+                "expires " + when),
+            LAM.Core.Stealth.StealthCertificateStatus.Valid => SettingRowView.Readout(
+                "stealth certificate", "what appear-offline presents to the League client",
+                "valid to " + when),
+            _ => SettingRowView.Readout(
+                "stealth certificate", "no certificate shipped in this build", "unavailable"),
+        };
     }
 
     /// <summary>The row's own note, which has to tell the truth about an unconfigured build.</summary>

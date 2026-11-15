@@ -113,9 +113,11 @@ public sealed class LoginOrchestrator
                 if (session is null)
                 {
                     // Every reason stealth can be unavailable has already been traced with its
-                    // specifics. Say so once here so the outcome is visible without the log.
+                    // specifics. Say so once here so the outcome is visible without the log, and point
+                    // at the Settings row that now shows the usual cause — an expired certificate.
                     progress.Report(new LoginProgress(
-                        LoginStage.LaunchingClient, "Signing in without stealth."));
+                        LoginStage.LaunchingClient,
+                        "Signing in without stealth — check the stealth certificate in Settings."));
 
                     return string.Empty;
                 }

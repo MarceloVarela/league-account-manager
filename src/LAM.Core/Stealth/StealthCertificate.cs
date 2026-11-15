@@ -145,7 +145,9 @@ public sealed class StealthCertificate
         }
     }
 
-    private bool MatchesHost(X509Certificate2 certificate)
+    private bool MatchesHost(X509Certificate2 certificate) => HasDnsName(certificate, _expectedHost);
+
+    private static bool HasDnsName(X509Certificate2 certificate, string expectedHost)
     {
         foreach (var extension in certificate.Extensions)
         {
@@ -153,23 +155,82 @@ public sealed class StealthCertificate
 
             foreach (var name in san.EnumerateDnsNames())
             {
-                if (string.Equals(name, _expectedHost, StringComparison.OrdinalIgnoreCase)) return true;
+                if (string.Equals(name, expectedHost, StringComparison.OrdinalIgnoreCase)) return true;
             }
         }
 
         return false;
     }
 
-    private byte[]? ReadCache()
+    private byte[]? ReadCache() => ReadFileQuiet(_cachePath);
+
+    private static byte[]? ReadFileQuiet(string path)
     {
         try
         {
-            return File.Exists(_cachePath) ? File.ReadAllBytes(_cachePath) : null;
+            return File.Exists(path) ? File.ReadAllBytes(path) : null;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             return null;
         }
+    }
+
+    /// <summary>
+    /// What the user needs told about the certificate, computed locally with no network call.
+    ///
+    /// The sign-in path (<see cref="TryLoadAsync"/>) already fails open silently on an expired or
+    /// missing certificate — friends simply see you online with only a line in the log. This is the
+    /// cheap read the Settings pane uses to surface that state instead, picking whichever of the
+    /// embedded and cached copies lasts longer (the same "newest valid wins" rule as the load path)
+    /// and classifying it against the same 20-day refresh threshold.
+    /// </summary>
+    public static StealthCertificateInfo Describe(byte[]? embedded, string cachePath, string expectedHost)
+    {
+        var leaf = LaterOf(
+            QuietLeaf(embedded, expectedHost),
+            QuietLeaf(ReadFileQuiet(cachePath), expectedHost));
+
+        if (leaf is null) return new StealthCertificateInfo(StealthCertificateStatus.Missing, null);
+
+        var notAfter = leaf.NotAfter;
+        var status =
+            notAfter <= DateTime.Now ? StealthCertificateStatus.Expired
+            : notAfter - DateTime.Now <= RefreshWhenUnder ? StealthCertificateStatus.ExpiringSoon
+            : StealthCertificateStatus.Valid;
+
+        return new StealthCertificateInfo(status, notAfter);
+    }
+
+    /// <summary>The matching, private-key-bearing leaf of a PKCS#12 blob, or null — quietly (no trace).</summary>
+    private static X509Certificate2? QuietLeaf(byte[]? blob, string expectedHost)
+    {
+        if (blob is null || blob.Length == 0) return null;
+
+        try
+        {
+            var all = X509CertificateLoader.LoadPkcs12Collection(
+                blob, password: null, X509KeyStorageFlags.DefaultKeySet);
+
+            foreach (var certificate in all)
+            {
+                if (certificate.HasPrivateKey && HasDnsName(certificate, expectedHost)) return certificate;
+            }
+
+            return null;
+        }
+        catch (System.Security.Cryptography.CryptographicException)
+        {
+            return null;
+        }
+    }
+
+    private static X509Certificate2? LaterOf(X509Certificate2? left, X509Certificate2? right)
+    {
+        if (left is null) return right;
+        if (right is null) return left;
+
+        return right.NotAfter > left.NotAfter ? right : left;
     }
 
     private void WriteCache(byte[] blob)
@@ -201,3 +262,22 @@ public sealed class StealthCertificate
         }
     }
 }
+
+/// <summary>How much life is left in the stealth certificate, for telling the user.</summary>
+public enum StealthCertificateStatus
+{
+    /// <summary>No usable certificate is embedded or cached — stealth cannot run.</summary>
+    Missing,
+
+    /// <summary>Good, and not near expiry.</summary>
+    Valid,
+
+    /// <summary>Still valid, but inside the 20-day refresh window — renew before it lapses.</summary>
+    ExpiringSoon,
+
+    /// <summary>Past its NotAfter — the friends list will see you online until it is renewed.</summary>
+    Expired,
+}
+
+/// <summary>The certificate's status and the date it runs out (null when Missing).</summary>
+public readonly record struct StealthCertificateInfo(StealthCertificateStatus Status, DateTime? NotAfter);
